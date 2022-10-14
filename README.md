@@ -1,1 +1,2 @@
 # cryo-em_classification
+Cryo-electron microscopy (Cryo-EM) is a way of imaging very small particle, but particle picking from these images remains a challenging early step in the Cryo-EM pipeline due to the diversity of particle shapes and the extremely low signal-to-noise ratio. Because of these issues, significant human intervention is often required to generate a high-quality set of particles. We want to apply the power of deep neural networks in order to alleviate this human intervention.
