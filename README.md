@@ -10,5 +10,6 @@ Cryo-electron microscopy (Cryo-EM) is a way of imaging very small particle, but 
 
 _Note_: Some package might not install because of _Windows Long Paths_. Solved [here](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=powershell).
 
+- Select virtual environment for ipynb kernel
 
 - Freeze requirements - `pip freeze > requirements.txt`
