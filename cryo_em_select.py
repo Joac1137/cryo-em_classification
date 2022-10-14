@@ -1,25 +1,30 @@
+from fileinput import filename
 from keras.utils import Sequence
 from pathlib import Path
 import os
 import pandas as pd
-
+import cv2
+import preprocess
+import numpy as np
 
 
 class CryoBatchGenerator(Sequence):
 
 
-    def __init__(self, batch_size, image_size=(224,224,3), shuffle=False, save_labels=False):
+    def __init__(self, X, batch_size, image_size=(224,224,3), shuffle=False, save_labels=False):
+        self.X = X
         self.batch_size = batch_size
         self.image_size = image_size
         self.shuffle = shuffle
         self.save_labels = save_labels
+        self.n = len(X)
 
     def on_epoch_end(self):
         """
         Shuffle
         """
         if self.shuffle:
-            pass
+            np.random.shuffle(self.X)
 
     def __getitem__(self, index):
         """
@@ -27,11 +32,11 @@ class CryoBatchGenerator(Sequence):
 
         Should save label data and not preprocess if we have create the labels
         """
-        data_path = Path(str(os.getcwd()) + '/data_example/raw_data/')
 
-        batch = [x for x in data_path.iterdir()][index * self.batch_size:(index + 1) * self.batch_size]
+        batch = self.X[index * self.batch_size:(index + 1) * self.batch_size]
         X, Y = self.__get_data(batch)
         return X, Y
+
 
     def __get_data(self, batch):
         """
@@ -55,18 +60,24 @@ class CryoBatchGenerator(Sequence):
         label_df = pd.read_csv(label_path, header=None)
         label_df = label_df.round(0).astype(int)
 
-        print(label_path)
-        print(label_df)
-        
+        # Coordinate system turns in a weird way.
+        points = [(rows[1], rows[0]) for index, rows in label_df.iterrows()]
 
-
-
-        pass 
+       
+        img = cv2.imread(os.path.join("",path))
+        gauss_img = preprocess.GaussianHighlight(img[:,:,0], points, 60)
     
+        if self.save_labels:
+            filename = Path(str(os.getcwd()) + '/data_example/label_data/' + image_name + '-points.csv')
+            print("Saving labels for file {file_name}").format(filename=image_name)
+
+            cv2.imwrite(filename, gauss_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
+
+        return img/255., gauss_img/255.
 
     
     def __len__(self):
-        pass
+        return self.n // self.batch_size
 
 
 
