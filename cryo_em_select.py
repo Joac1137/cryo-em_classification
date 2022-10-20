@@ -114,9 +114,18 @@ class CryoBatchGenerator(Sequence):
         cropped_label_images = []
         for i in range(224,1200,224):
             for j in range(224,1200,224):
-                cropped_images.append(img[i-224:i, j-224:j] /255. )
-                cropped_label_images.append(gauss_img[i-224:i, j-224:j] /255.)
-    
+                image = img[i-224:i, j-224:j]                
+                image = image.astype(float)
+                image /= 255.
+
+                gauss_image = gauss_img[i-224:i, j-224:j]
+                gauss_image = gauss_image.astype(float)
+                gauss_image /= 255.
+
+                cropped_images.append(image)
+                cropped_label_images.append(gauss_image)
+
+
         if self.save_labels:
             filename = Path(str(os.getcwd()) + '/data_example/label_data/' + image_name + '-points.csv-gauss_img.jpg')
             filename.touch(exist_ok=True)
