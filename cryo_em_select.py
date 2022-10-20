@@ -1,4 +1,4 @@
-from tkinter import image_names
+from random import shuffle
 from keras.utils import Sequence
 from pathlib import Path
 import os
@@ -6,8 +6,18 @@ import pandas as pd
 import cv2
 import preprocess
 import numpy as np
-from keras.layers import Conv2D, Activation, BatchNormalization
-
+from keras.layers import (
+    Conv2D, 
+    Activation, 
+    BatchNormalization, 
+    UpSampling2D, 
+    Dense, 
+    MaxPooling2D,
+    concatenate, 
+    Input
+)
+from keras.models import Model
+from keras.optimizers import SGD, RMSprop
 
 
 class CryoBatchGenerator(Sequence):
@@ -70,8 +80,12 @@ class CryoBatchGenerator(Sequence):
 
         # __get_input return tuples, thus we convert them to list of tuples and further map to a list
         X_batch, Y_batch = zip(*[self.__get_input(x) for x in batch])
+
+        # Collapse the first dimensions.
         X_batch = np.asarray(X_batch)
+        X_batch = X_batch.reshape(-1, *X_batch.shape[-3:])
         Y_batch = np.asarray(Y_batch)
+        Y_batch = Y_batch.reshape(-1, *Y_batch.shape[-2:])
         
         return X_batch, Y_batch
 
@@ -95,14 +109,20 @@ class CryoBatchGenerator(Sequence):
        
         img = cv2.imread(os.path.join("",path))
         gauss_img = preprocess.GaussianHighlight(img[:,:,0], points, 60)
+
+        cropped_images = []
+        cropped_label_images = []
+        for i in range(224,1200,224):
+            for j in range(224,1200,224):
+                cropped_images.append(img[i-224:i, j-224:j] /255. )
+                cropped_label_images.append(gauss_img[i-224:i, j-224:j] /255.)
     
         if self.save_labels:
             filename = Path(str(os.getcwd()) + '/data_example/label_data/' + image_name + '-points.csv-gauss_img.jpg')
-            print("Saving labels for file {image_name}".format(image_name=image_name))
+            filename.touch(exist_ok=True)
+            #cv2.imwrite(str(filename), gauss_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
 
-            cv2.imwrite(str(filename), gauss_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
-
-        return img/255., gauss_img/255.
+        return cropped_images, cropped_label_images
     
     def __len__(self):
         """
@@ -123,26 +143,135 @@ class CryoEmNet:
         """
         self.batch_size = batch_size
         self.image_size = image_size
-        
-    def __convolution_layer(x, filters, kernel_size=3, padding='same', kernel_initializer='he_normal'):
+        #self.model = self.build_preenc_convdec()
+        self.model = self.build_custom_unet()
+
+    def __convolution_layer(self, x, filters, kernel_size=3, padding='same', kernel_initializer='he_normal'):
         x = Conv2D(filters, kernel_size, padding=padding, kernel_initializer=kernel_initializer)(x)
         x = BatchNormalization()(x)
         x = Activation('relu')(x)
         return x
 
+    def build_preenc_convdec(self):
+        from keras.applications.mobilenet_v2 import MobileNetV2
+        conv_base = MobileNetV2(weights='imagenet',
+                      include_top=False,
+                      input_shape=(224,224,3))
+
+        # Decoder
+        encoder = conv_base.output
+        
+        convolution_layer = self.__convolution_layer(encoder, filters=32)
+        upsampling = UpSampling2D(size = (2,2))(convolution_layer)
+
+        convolution_layer = self.__convolution_layer(upsampling, filters=16)
+        upsampling = UpSampling2D(size = (2,2))(convolution_layer)
+
+        convolution_layer = self.__convolution_layer(upsampling, filters=8)
+        upsampling = UpSampling2D(size = (2,2))(convolution_layer)
+
+        convolution_layer = self.__convolution_layer(upsampling, filters=4)
+        upsampling = UpSampling2D(size = (2,2))(convolution_layer)
+
+        convolution_layer = self.__convolution_layer(upsampling, filters=2)
+        upsampling = UpSampling2D(size = (2,2))(convolution_layer)
+        
+        #feature_extractor = Model(conv_base.input, upsampling)
+
+        output = Dense(64, activation="relu", name="denseL1")(upsampling)
+        output = Dense(10, activation="relu", name="denseL2")(output)
+        output = Dense(1, activation="sigmoid", name="denseL3")(output)
+        
+        model = Model(conv_base.input, output)
+
+
+        num_base_layers = len(conv_base.layers)
+        for layer in model.layers[:num_base_layers]:
+            layer.trainable=False
+        for layer in model.layers[num_base_layers:]:
+            layer.trainable=True
+
+        model.summary()
+
+        return model
+        
+
+    def build_custom_unet(self):
+        inputs = Input(shape=self.image_size)
+
+        # Encoder
+        convolution_1 = self.__convolution_layer(inputs,filters=8)
+        pooling_1 = MaxPooling2D(pool_size=(2, 2))(convolution_1)
+        convolution_2 = self.__convolution_layer(pooling_1,filters=16)
+        pooling_2 = MaxPooling2D(pool_size=(2, 2))(convolution_2)
+        convolution_3 = self.__convolution_layer(pooling_2,filters=32)
+        pooling_3 = MaxPooling2D(pool_size=(2, 2))(convolution_3)
+        convolution_4 = self.__convolution_layer(pooling_3,filters=64)
+
+        # Decoder
+        upsampling_7 = self.__convolution_layer(convolution_4,filters=32)
+        upsampling_7 = UpSampling2D(size = (2,2))(upsampling_7)
+        merge7 = concatenate([convolution_3,upsampling_7], axis = 3)
+        upsampling_8 = self.__convolution_layer(merge7,filters=16)
+        upsampling_8 = UpSampling2D(size = (2,2))(upsampling_7)
+        merge8 = concatenate([convolution_2,upsampling_8], axis = 3)
+        upsampling_9 = self.__convolution_layer(merge8,filters=8)
+        upsampling_9 = UpSampling2D(size = (2,2))(upsampling_9)
+        merge9 = concatenate([convolution_1,upsampling_9], axis = 3)
+
+        # outputs = Dense(64, activation="relu", name="denseL1")(merge9)
+        # outputs = Dense(10, activation="relu", name="denseL2")(outputs)
+        # outputs = Dense(1, activation="sigmoid", name="denseL3")(outputs)
+
+        # final_layer = Activation('sigmoid')(outputs)
+
+        convolution_10 = Conv2D(1, 1, activation = 'sigmoid')(merge9)
+
+        # Specify model
+        convolution_model = Model(inputs=inputs, outputs=convolution_10)
+        convolution_model.summary()
+
+        return convolution_model
+    
+
     def build_convolutional(self):
         pass
-
 
     def build_unet(self):
         pass
 
-    def train(self):
-        pass
+    def train(self, learning_rate=10 ** -2, epochs=10):
+        
+        data_path = [x for x in Path(str(os.getcwd()) + '/data_example/raw_data/').iterdir()]
+
+        train_generator = CryoBatchGenerator(
+            X=data_path,
+            batch_size=self.batch_size,
+            image_size=self.image_size,
+            shuffle=True,
+            save_labels=True
+        )
+
+        optimizer = SGD(
+            learning_rate=learning_rate, decay=1e-6, momentum=0.9, nesterov=True
+        )
+
+        opt = RMSprop(
+            learning_rate=learning_rate
+        )
+
+        self.model.compile(
+            optimizer=opt, loss='mse', metrics=['accuracy']
+        )
+        self.model.fit(
+            train_generator,
+            epochs=epochs
+        )
+
     
-    def predict(self):
+    def predict(self, img):
+        result = self.model.predict(img)
+
+        return result
         # Predict should divide and conquer... and then assemble again
-
-        pass
-
-
+        
