@@ -14,6 +14,7 @@ from keras.layers import (
     UpSampling2D, 
     Dense, 
     MaxPooling2D,
+    LeakyReLU,
     concatenate, 
     Input
 )
@@ -67,9 +68,6 @@ class CryoBatchGenerator(Sequence):
 
         batch = self.X[index * self.batch_size:(index + 1) * self.batch_size]
         X, Y = self.__get_data(batch)
-
-        import keras
-        X = keras.applications.mobilenet_v2.preprocess_input(X) 
 
         return X, Y
 
@@ -157,13 +155,15 @@ class CryoEmNet:
         """
         self.batch_size = batch_size
         self.image_size = image_size
-        self.model = self.build_preenc_convdec()
+        #self.model = self.build_preenc_convdec()
         #self.model = self.build_custom_unet()
+        self.model = self.build_unet()
 
     def __convolution_layer(self, x, filters, kernel_size=3, padding='same', kernel_initializer='he_normal'):
         x = Conv2D(filters, kernel_size, padding=padding, kernel_initializer=kernel_initializer)(x)
         x = BatchNormalization()(x)
-        x = Activation('relu')(x)
+        x = LeakyReLU(alpha=0.1)(x)
+        #x = Activation('relu')(x)
         return x
 
     def build_preenc_convdec(self):
@@ -190,11 +190,13 @@ class CryoEmNet:
         convolution_layer = self.__convolution_layer(upsampling, filters=2)
         upsampling = UpSampling2D(size = (2,2))(convolution_layer)
         
-        #feature_extractor = Model(conv_base.input, upsampling)
+        # feature_extractor = Model(conv_base.input, upsampling)
 
         output = Dense(64, activation="relu", name="denseL1")(upsampling)
         output = Dense(10, activation="relu", name="denseL2")(output)
         output = Dense(1, activation="sigmoid", name="denseL3")(output)
+
+        #output = Conv2D(1, 1, activation = 'sigmoid')(upsampling)
         
         model = Model(conv_base.input, output)
 
@@ -289,7 +291,55 @@ class CryoEmNet:
         pass
 
     def build_unet(self):
-        pass
+        inputs = Input(shape=self.image_size)
+
+        # Encoder
+        convolution_1 = self.__convolution_layer(inputs,filters=8)
+        pooling_1 = MaxPooling2D(pool_size=(2, 2))(convolution_1)
+        convolution_2 = self.__convolution_layer(pooling_1,filters=16)
+        pooling_2 = MaxPooling2D(pool_size=(2, 2))(convolution_2)
+        convolution_3 = self.__convolution_layer(pooling_2,filters=32)
+        pooling_3 = MaxPooling2D(pool_size=(2, 2))(convolution_3)
+        convolution_4 = self.__convolution_layer(pooling_3,filters=64)
+
+        # Decoder
+        convolution_5 = self.__convolution_layer(convolution_4,filters=32)
+        upsampling_1 = UpSampling2D(size = (2,2))(convolution_5)
+
+        convolution_5_1 = self.__convolution_layer(upsampling_1,filters=32)
+        convolution_5_2 = self.__convolution_layer(convolution_5_1,filters=32)
+
+        merge_1 = concatenate([convolution_3,convolution_5_2], axis = 3)
+
+        convolution_6 = self.__convolution_layer(merge_1,filters=16)
+        upsampling_2 = UpSampling2D(size = (2,2))(convolution_6)
+
+        convolution_6_1 = self.__convolution_layer(upsampling_2,filters=16)
+        convolution_6_2 = self.__convolution_layer(convolution_6_1,filters=16)
+
+        merge_2 = concatenate([convolution_2,convolution_6_2], axis = 3)
+
+        convolution_7 = self.__convolution_layer(merge_2,filters=8)
+        upsampling_3 = UpSampling2D(size = (2,2))(convolution_7)
+
+        convolution_7_1 = self.__convolution_layer(upsampling_3,filters=16)
+        convolution_7_2 = self.__convolution_layer(convolution_7_1,filters=16)
+
+        merge_3 = concatenate([convolution_1,convolution_7_2], axis = 3)
+
+        # outputs = Dense(64, activation="relu", name="denseL1")(merge_3)
+        # outputs = Dense(10, activation="relu", name="denseL2")(outputs)
+        # outputs = Dense(1, activation="sigmoid", name="denseL3")(outputs)
+
+        # final_layer = Activation('sigmoid')(outputs)
+
+        outputs = Conv2D(1, 1, activation = 'sigmoid')(merge_3)
+
+        # Specify model
+        custom_unet = Model(inputs=inputs, outputs=outputs)
+        custom_unet.summary()
+
+        return custom_unet
 
     def train(self, learning_rate=10 ** -2, epochs=10):
         
@@ -390,4 +440,3 @@ class CryoEmNet:
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
             fig.add_subplot(ax)
-        fig.show()
