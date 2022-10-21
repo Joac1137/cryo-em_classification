@@ -1,4 +1,5 @@
 from random import shuffle
+from xml.etree.ElementPath import prepare_predicate
 from keras.utils import Sequence
 from pathlib import Path
 import os
@@ -18,6 +19,7 @@ from keras.layers import (
 )
 from keras.models import Model
 from keras.optimizers import SGD, RMSprop
+from matplotlib import pyplot as plt
 
 
 class CryoBatchGenerator(Sequence):
@@ -65,6 +67,9 @@ class CryoBatchGenerator(Sequence):
 
         batch = self.X[index * self.batch_size:(index + 1) * self.batch_size]
         X, Y = self.__get_data(batch)
+
+        import keras
+        X = keras.applications.mobilenet_v2.preprocess_input(X) 
 
         return X, Y
 
@@ -128,8 +133,8 @@ class CryoBatchGenerator(Sequence):
 
         if self.save_labels:
             filename = Path(str(os.getcwd()) + '/data_example/label_data/' + image_name + '-points.csv-gauss_img.jpg')
-            filename.touch(exist_ok=True)
-            #cv2.imwrite(str(filename), gauss_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
+            #filename.touch(exist_ok=True)
+            cv2.imwrite(str(filename), gauss_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
 
         return cropped_images, cropped_label_images
     
@@ -152,8 +157,8 @@ class CryoEmNet:
         """
         self.batch_size = batch_size
         self.image_size = image_size
-        #self.model = self.build_preenc_convdec()
-        self.model = self.build_custom_unet()
+        self.model = self.build_preenc_convdec()
+        #self.model = self.build_custom_unet()
 
     def __convolution_layer(self, x, filters, kernel_size=3, padding='same', kernel_initializer='he_normal'):
         x = Conv2D(filters, kernel_size, padding=padding, kernel_initializer=kernel_initializer)(x)
@@ -205,6 +210,43 @@ class CryoEmNet:
         return model
         
 
+    def build_basic_model(self):
+        inputs = Input(shape=self.image_size)
+
+        # Encoder
+        convolution_1 = self.__convolution_layer(inputs,filters=8)
+        pooling_1 = MaxPooling2D(pool_size=(2, 2))(convolution_1)
+        convolution_2 = self.__convolution_layer(pooling_1,filters=16)
+        pooling_2 = MaxPooling2D(pool_size=(2, 2))(convolution_2)
+        convolution_3 = self.__convolution_layer(pooling_2,filters=32)
+        pooling_3 = MaxPooling2D(pool_size=(2, 2))(convolution_3)
+        convolution_4 = self.__convolution_layer(pooling_3,filters=64)
+
+        # Decoder
+        convolution_5 = self.__convolution_layer(convolution_4,filters=32)
+        upsampling_1 = UpSampling2D(size = (2,2))(convolution_5)
+        
+        convolution_6 = self.__convolution_layer(upsampling_1,filters=16)
+        upsampling_2 = UpSampling2D(size = (2,2))(convolution_6)
+        
+        convolution_7 = self.__convolution_layer(upsampling_2,filters=8)
+        upsampling_3 = UpSampling2D(size = (2,2))(convolution_7)
+        
+        outputs = Dense(64, activation="relu", name="denseL1")(upsampling_3)
+        outputs = Dense(10, activation="relu", name="denseL2")(outputs)
+        outputs = Dense(1, activation="sigmoid", name="denseL3")(outputs)
+
+        # final_layer = Activation('sigmoid')(outputs)
+
+        #convolution_10 = Conv2D(1, 1, activation = 'sigmoid')(upsampling_3)
+
+        # Specify model
+        basic_model = Model(inputs=inputs, outputs=outputs)
+        basic_model.summary()
+
+        return basic_model
+
+
     def build_custom_unet(self):
         inputs = Input(shape=self.image_size)
 
@@ -218,29 +260,29 @@ class CryoEmNet:
         convolution_4 = self.__convolution_layer(pooling_3,filters=64)
 
         # Decoder
-        upsampling_7 = self.__convolution_layer(convolution_4,filters=32)
-        upsampling_7 = UpSampling2D(size = (2,2))(upsampling_7)
-        merge7 = concatenate([convolution_3,upsampling_7], axis = 3)
-        upsampling_8 = self.__convolution_layer(merge7,filters=16)
-        upsampling_8 = UpSampling2D(size = (2,2))(upsampling_7)
-        merge8 = concatenate([convolution_2,upsampling_8], axis = 3)
-        upsampling_9 = self.__convolution_layer(merge8,filters=8)
-        upsampling_9 = UpSampling2D(size = (2,2))(upsampling_9)
-        merge9 = concatenate([convolution_1,upsampling_9], axis = 3)
+        convolution_5 = self.__convolution_layer(convolution_4,filters=32)
+        upsampling_1 = UpSampling2D(size = (2,2))(convolution_5)
+        merge_1 = concatenate([convolution_3,upsampling_1], axis = 3)
+        convolution_6 = self.__convolution_layer(merge_1,filters=16)
+        upsampling_2 = UpSampling2D(size = (2,2))(convolution_6)
+        merge_2 = concatenate([convolution_2,upsampling_2], axis = 3)
+        convolution_7 = self.__convolution_layer(merge_2,filters=8)
+        upsampling_3 = UpSampling2D(size = (2,2))(convolution_7)
+        merge_3 = concatenate([convolution_1,upsampling_3], axis = 3)
 
-        # outputs = Dense(64, activation="relu", name="denseL1")(merge9)
+        # outputs = Dense(64, activation="relu", name="denseL1")(merge_3)
         # outputs = Dense(10, activation="relu", name="denseL2")(outputs)
         # outputs = Dense(1, activation="sigmoid", name="denseL3")(outputs)
 
         # final_layer = Activation('sigmoid')(outputs)
 
-        convolution_10 = Conv2D(1, 1, activation = 'sigmoid')(merge9)
+        outputs = Conv2D(1, 1, activation = 'sigmoid')(merge_3)
 
         # Specify model
-        convolution_model = Model(inputs=inputs, outputs=convolution_10)
-        convolution_model.summary()
+        custom_unet = Model(inputs=inputs, outputs=outputs)
+        custom_unet.summary()
 
-        return convolution_model
+        return custom_unet
     
 
     def build_convolutional(self):
@@ -279,8 +321,73 @@ class CryoEmNet:
 
     
     def predict(self, img):
+        # Predict should divide and conquer... and then assemble again
+        
         result = self.model.predict(img)
 
         return result
-        # Predict should divide and conquer... and then assemble again
         
+
+
+
+    
+
+    def show_predictions(self, image_name):
+        import matplotlib.gridspec as gridspec
+
+        path = str(os.getcwd()) + '/data_example/raw_data/' + str(image_name)
+        image = cv2.imread(str(path))
+
+        path = str(os.getcwd()) + '/data_example/label_data/' + str(image_name) + '-points.csv-gauss_img.jpg'
+        label_image = cv2.imread(path)
+
+        resized_images = []
+        resized_label_images = []
+        for i in range(224,1200,224):
+            for j in range(224,1200,224):
+                image_resize = image[i-224:i, j-224:j]
+                image_resize = image_resize.astype(float)
+                image_resize /= 255
+
+                label_image_resize = label_image[i-224:i, j-224:j]
+                label_image_resize= label_image_resize.astype(float)
+                label_image_resize /= 255
+
+                resized_images.append(image_resize)
+                resized_label_images.append(label_image_resize)
+
+        resized_images = np.asarray(resized_images)
+        resized_label_images = np.asarray(resized_label_images)
+        
+        out = self.predict(resized_images[:,:,:,:])
+
+        fig = plt.figure(figsize=(20, 8))
+        
+        outer = gridspec.GridSpec(5, 5, wspace=0.2, hspace=0.5)
+        plt.gray()
+
+        for i in range(len(resized_images)):
+            inner = gridspec.GridSpecFromSubplotSpec(1, 3,
+                            subplot_spec=outer[i], wspace=0.2, hspace=0.5)
+
+            ax = plt.Subplot(fig, inner[0])
+            ax.imshow(resized_images[i,:,:,:])
+            ax.set_title('Input image', fontsize=10)
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+            fig.add_subplot(ax)
+
+            ax = plt.Subplot(fig, inner[1])
+            ax.imshow(out[i,:,:,:],vmin=0,vmax=1)
+            ax.set_title('Predicted', fontsize=10)
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+            fig.add_subplot(ax)
+            
+            ax = plt.Subplot(fig, inner[2])
+            ax.imshow(resized_label_images[i,:,:],vmin=0,vmax=1)
+            ax.set_title('Ground truth', fontsize=10)
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+            fig.add_subplot(ax)
+        fig.show()
