@@ -1,3 +1,4 @@
+from cgitb import small
 from random import shuffle
 from xml.etree.ElementPath import prepare_predicate
 from keras.utils import Sequence
@@ -15,6 +16,8 @@ from keras.layers import (
     Dense, 
     MaxPooling2D,
     LeakyReLU,
+    GlobalAveragePooling2D,
+    Flatten,
     concatenate, 
     Input
 )
@@ -89,6 +92,7 @@ class CryoBatchGenerator(Sequence):
         X_batch = X_batch.reshape(-1, *X_batch.shape[-3:])
         Y_batch = np.asarray(Y_batch)
         Y_batch = Y_batch.reshape(-1, *Y_batch.shape[-2:])
+        #Y_batch = np.expand_dims(Y_batch, axis=3)
         
         return X_batch, Y_batch
 
@@ -148,16 +152,27 @@ class CryoBatchGenerator(Sequence):
 
 class CryoEmNet:
     
-    def __init__(self, batch_size, image_size):
+    def __init__(self, batch_size, image_size, model=None):
         """
         :param batch_size: Batch size for training / prediction
         :param input_size: Input image size
         """
         self.batch_size = batch_size
         self.image_size = image_size
-        #self.model = self.build_preenc_convdec()
-        #self.model = self.build_custom_unet()
-        self.model = self.build_unet()
+        if model is None:
+            #self.model = self.build_preenc_convdec()
+            #self.model = self.build_unet()
+            self.model = self.small_unet()
+
+            # Good base model
+            #self.model = self.build_basic_model()
+
+            # Prob good model (Need more training)
+            # self.model = self.build_custom_unet()
+            
+
+        else:
+            self.model = model
 
     def __convolution_layer(self, x, filters, kernel_size=3, padding='same', kernel_initializer='he_normal'):
         x = Conv2D(filters, kernel_size, padding=padding, kernel_initializer=kernel_initializer)(x)
@@ -190,13 +205,7 @@ class CryoEmNet:
         convolution_layer = self.__convolution_layer(upsampling, filters=2)
         upsampling = UpSampling2D(size = (2,2))(convolution_layer)
         
-        # feature_extractor = Model(conv_base.input, upsampling)
-
-        output = Dense(64, activation="relu", name="denseL1")(upsampling)
-        output = Dense(10, activation="relu", name="denseL2")(output)
-        output = Dense(1, activation="sigmoid", name="denseL3")(output)
-
-        #output = Conv2D(1, 1, activation = 'sigmoid')(upsampling)
+        output = Conv2D(1, 1, activation = 'sigmoid')(upsampling)
         
         model = Model(conv_base.input, output)
 
@@ -233,20 +242,43 @@ class CryoEmNet:
         
         convolution_7 = self.__convolution_layer(upsampling_2,filters=8)
         upsampling_3 = UpSampling2D(size = (2,2))(convolution_7)
-        
-        outputs = Dense(64, activation="relu", name="denseL1")(upsampling_3)
-        outputs = Dense(10, activation="relu", name="denseL2")(outputs)
-        outputs = Dense(1, activation="sigmoid", name="denseL3")(outputs)
 
-        # final_layer = Activation('sigmoid')(outputs)
-
-        #convolution_10 = Conv2D(1, 1, activation = 'sigmoid')(upsampling_3)
+        outputs = Conv2D(1, 1, activation = 'sigmoid')(upsampling_3)
 
         # Specify model
         basic_model = Model(inputs=inputs, outputs=outputs)
         basic_model.summary()
 
         return basic_model
+
+    
+    def small_unet(self):
+        inputs = Input(shape=self.image_size)
+
+        # Encoder
+        convolution_1 = self.__convolution_layer(inputs,filters=8)
+        pooling_1 = MaxPooling2D(pool_size=(2, 2))(convolution_1)
+        convolution_2 = self.__convolution_layer(pooling_1,filters=16)
+        pooling_2 = MaxPooling2D(pool_size=(2, 2))(convolution_2)
+        convolution_3 = self.__convolution_layer(pooling_2,filters=32)
+        pooling_3 = MaxPooling2D(pool_size=(2, 2))(convolution_3)
+        convolution_4 = self.__convolution_layer(pooling_3,filters=64)
+
+        # Decoder
+        upsampling_1 = UpSampling2D(size = (2,2))(convolution_4)
+        merge_1 = concatenate([convolution_3,upsampling_1], axis = 3)
+        upsampling_2 = UpSampling2D(size = (2,2))(merge_1)
+        merge_2 = concatenate([convolution_2,upsampling_2], axis = 3)
+        upsampling_3 = UpSampling2D(size = (2,2))(merge_2)
+        merge_3 = concatenate([convolution_1,upsampling_3], axis = 3)
+
+        outputs = Conv2D(1, 1, activation = 'sigmoid')(merge_3)
+
+        # Specify model
+        small_unet = Model(inputs=inputs, outputs=outputs)
+        small_unet.summary()
+
+        return small_unet
 
 
     def build_custom_unet(self):
@@ -271,12 +303,6 @@ class CryoEmNet:
         convolution_7 = self.__convolution_layer(merge_2,filters=8)
         upsampling_3 = UpSampling2D(size = (2,2))(convolution_7)
         merge_3 = concatenate([convolution_1,upsampling_3], axis = 3)
-
-        # outputs = Dense(64, activation="relu", name="denseL1")(merge_3)
-        # outputs = Dense(10, activation="relu", name="denseL2")(outputs)
-        # outputs = Dense(1, activation="sigmoid", name="denseL3")(outputs)
-
-        # final_layer = Activation('sigmoid')(outputs)
 
         outputs = Conv2D(1, 1, activation = 'sigmoid')(merge_3)
 
@@ -327,12 +353,6 @@ class CryoEmNet:
 
         merge_3 = concatenate([convolution_1,convolution_7_2], axis = 3)
 
-        # outputs = Dense(64, activation="relu", name="denseL1")(merge_3)
-        # outputs = Dense(10, activation="relu", name="denseL2")(outputs)
-        # outputs = Dense(1, activation="sigmoid", name="denseL3")(outputs)
-
-        # final_layer = Activation('sigmoid')(outputs)
-
         outputs = Conv2D(1, 1, activation = 'sigmoid')(merge_3)
 
         # Specify model
@@ -360,8 +380,9 @@ class CryoEmNet:
         opt = RMSprop(
             learning_rate=learning_rate
         )
-
+        import keras
         self.model.compile(
+            # loss='mse'
             optimizer=opt, loss='mse', metrics=['accuracy']
         )
         self.model.fit(
@@ -414,21 +435,20 @@ class CryoEmNet:
         fig = plt.figure(figsize=(20, 8))
         
         outer = gridspec.GridSpec(5, 5, wspace=0.2, hspace=0.5)
-        plt.gray()
 
         for i in range(len(resized_images)):
             inner = gridspec.GridSpecFromSubplotSpec(1, 3,
                             subplot_spec=outer[i], wspace=0.2, hspace=0.5)
 
             ax = plt.Subplot(fig, inner[0])
-            ax.imshow(resized_images[i,:,:,:])
+            ax.imshow(resized_images[i,:,:,:], cmap='gray')
             ax.set_title('Input image', fontsize=10)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
             fig.add_subplot(ax)
 
             ax = plt.Subplot(fig, inner[1])
-            ax.imshow(out[i,:,:,:],vmin=0,vmax=1)
+            ax.imshow(out[i,:,:,:],vmin=0,vmax=1, cmap='gray')
             ax.set_title('Predicted', fontsize=10)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
