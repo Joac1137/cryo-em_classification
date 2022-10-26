@@ -1,4 +1,3 @@
-from cgitb import small
 from random import shuffle
 from xml.etree.ElementPath import prepare_predicate
 from keras.utils import Sequence
@@ -22,8 +21,15 @@ from keras.layers import (
     Input
 )
 from keras.models import Model
-from keras.optimizers import SGD, RMSprop
+from keras.optimizers import Adam
 from matplotlib import pyplot as plt
+from keras.callbacks import (
+    ModelCheckpoint, 
+    EarlyStopping, 
+    ReduceLROnPlateau,
+    TensorBoard,
+    SGDRScheduler
+)
 
 
 class CryoBatchGenerator(Sequence):
@@ -92,7 +98,6 @@ class CryoBatchGenerator(Sequence):
         X_batch = X_batch.reshape(-1, *X_batch.shape[-3:])
         Y_batch = np.asarray(Y_batch)
         Y_batch = Y_batch.reshape(-1, *Y_batch.shape[-2:])
-        #Y_batch = np.expand_dims(Y_batch, axis=3)
         
         return X_batch, Y_batch
 
@@ -151,6 +156,9 @@ class CryoBatchGenerator(Sequence):
 
 
 class CryoEmNet:
+    """
+    This is our cryo-em segmentation class
+    """
     
     def __init__(self, batch_size, image_size, model=None):
         """
@@ -159,7 +167,8 @@ class CryoEmNet:
         """
         self.batch_size = batch_size
         self.image_size = image_size
-        if model is None:
+
+        if model:
             #self.model = self.build_preenc_convdec()
             #self.model = self.build_unet()
             self.model = self.small_unet()
@@ -361,7 +370,14 @@ class CryoEmNet:
 
         return custom_unet
 
-    def train(self, learning_rate=10 ** -2, epochs=10):
+    def train(
+        self, 
+        save_weights_name: Path,
+        nb_epoch_early=10,
+        warmrestarts=True,
+        learning_rate=10 ** -2, 
+        epochs=10
+    ):
         
         data_path = [x for x in Path(str(os.getcwd()) + '/data_example/raw_data/').iterdir()]
 
@@ -373,18 +389,93 @@ class CryoEmNet:
             save_labels=True
         )
 
-        optimizer = SGD(
-            learning_rate=learning_rate, decay=1e-6, momentum=0.9, nesterov=True
+        # Define callbacks
+        all_callbacks = []
+        checkpoint = ModelCheckpoint(
+            save_weights_name,
+            monitor="val_loss",
+            verbose=1,
+            save_best_only=True,
+            save_weights_only=True,
+            mode="min",
+            period=1,
+        )
+        all_callbacks.append(checkpoint)
+
+        early_stop = EarlyStopping(
+            monitor="val_loss",
+            min_delta=0.0005,
+            patience=nb_epoch_early,
+            mode="min",
+            verbose=1,
+        )
+        all_callbacks.append(early_stop)
+
+        reduceLROnPlateau = ReduceLROnPlateau(
+            monitor="val_loss",
+            factor=0.1,
+            patience=int(nb_epoch_early * 0.6),
+            verbose=1,
+        )
+        all_callbacks.append(reduceLROnPlateau)
+
+        try:
+            os.makedirs(os.path.expanduser("logs/"))
+        except:
+            pass
+
+        tb_counter = (
+            len(
+                [
+                    log
+                    for log in os.listdir(os.path.expanduser("logs/"))
+                    if "cinderella" in log
+                ]
+            )
+            + 1
+        )
+        tensorboard = TensorBoard(
+            log_dir=os.path.expanduser("logs/") + "cinderella" + "_" + str(tb_counter),
+            histogram_freq=0,
+            write_graph=True,
+            write_images=False,
+        )
+        all_callbacks.append(tensorboard)
+        if not warmrestarts:
+            reduce_lr_on_plateau = ReduceLROnPlateau(
+                monitor="val_loss",
+                factor=0.1,
+                patience=int(nb_epoch_early * 0.6),
+                verbose=1,
+            )
+            all_callbacks.append(reduce_lr_on_plateau)
+        else:
+            schedule = SGDRScheduler(
+                min_lr=1e-7,
+                max_lr=1e-4,
+                steps_per_epoch=len(train_generator),
+                lr_decay=0.9,
+                cycle_length=5,
+                mult_factor=1.5,
+            )
+            all_callbacks.append(schedule)
+
+        optimizer = Adam(
+            learning_rate=learning_rate,
+            beta_1=0.9,
+            beta_2=0.999,
+            epsilon=1e-07,
+            amsgrad=False,
+            name="Adam",
         )
 
-        opt = RMSprop(
-            learning_rate=learning_rate
-        )
-        import keras
         self.model.compile(
-            # loss='mse'
-            optimizer=opt, loss='mse', metrics=['accuracy']
+            optimizer=optimizer, 
+            loss='mse', 
+            metrics=['accuracy'],
+            callbacks=all_callbacks
         )
+
         self.model.fit(
             train_generator,
             epochs=epochs
