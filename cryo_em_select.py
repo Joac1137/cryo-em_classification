@@ -97,7 +97,7 @@ class CryoBatchGenerator(Sequence):
         X_batch = X_batch.reshape(-1, *X_batch.shape[-3:])
         Y_batch = np.asarray(Y_batch)
         Y_batch = Y_batch.reshape(-1, *Y_batch.shape[-2:])
-        
+
         return X_batch, Y_batch
 
     def __get_input(self, path):
@@ -109,40 +109,42 @@ class CryoBatchGenerator(Sequence):
                     First output is the original image scaled
                     Second output is the labels for the images
         """
-        image_name = path.name
         label_path = Path(str(os.getcwd()) + '/data/label_annotation/' + path.stem + '-points' + '.csv')
 
-        label_df = pd.read_csv(label_path, header=None)
-        label_df = label_df.round(0).astype(int)
+        try:
+            label_df = pd.read_csv(label_path, header=None)
+            label_df = label_df.round(0).astype(int)
 
-        # Coordinate system turns in a weird way.
-        points = [(rows[1], rows[0]) for _, rows in label_df.iterrows()]
-       
-        img = cv2.imread(os.path.join("",path))
-        gauss_img = preprocess.GaussianHighlight(img[:,:,0], points, 60)
+            # Coordinate system turns in a weird way.
+            points = [(rows[1], rows[0]) for _, rows in label_df.iterrows()]
+        
+            img = cv2.imread(str(path))
+            gauss_img = preprocess.GaussianHighlight(img[:,:,0], points, 32)
 
-        cropped_images = []
-        cropped_label_images = []
-        for i in range(224,1200,224):
-            for j in range(224,1200,224):
-                image = img[i-224:i, j-224:j]                
-                image = image.astype(float)
-                image /= 255.
+            cropped_images = []
+            cropped_label_images = []
+            for i in range(224,682,224):
+                for j in range(224,960,224):
+                    image = img[i-224:i, j-224:j]                
+                    image = image.astype(float)
+                    image /= 255.
 
-                gauss_image = gauss_img[i-224:i, j-224:j]
-                gauss_image = gauss_image.astype(float)
-                gauss_image /= 255.
+                    gauss_image = gauss_img[i-224:i, j-224:j]
+                    gauss_image = gauss_image.astype(float)
+                    gauss_image /= 255.
 
-                cropped_images.append(image)
-                cropped_label_images.append(gauss_image)
+                    cropped_images.append(image)
+                    cropped_label_images.append(gauss_image)
 
 
-        if self.save_labels:
-            filename = Path(str(os.getcwd()) + '/data/label_data/' + path.stem + '-points.jpg')
-            #filename.touch(exist_ok=True)
-            cv2.imwrite(str(filename), gauss_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
+            if self.save_labels:
+                filename = Path(str(os.getcwd()) + '/data/label_data/' + path.stem + '-points.jpg')
+                if not filename.exists():
+                    cv2.imwrite(str(filename), gauss_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
 
-        return cropped_images, cropped_label_images
+            return cropped_images, cropped_label_images
+        except Exception:
+            return [], []
     
     def __len__(self):
         """
@@ -381,7 +383,7 @@ class CryoEmNet:
         data_path = [x for x in Path(str(os.getcwd()) + '/data/raw_data/').iterdir()]
 
         train_generator = CryoBatchGenerator(
-            X=data_path,
+            X=data_path[:100],
             batch_size=self.batch_size,
             image_size=self.image_size,
             shuffle=True,
@@ -396,7 +398,7 @@ class CryoEmNet:
             verbose=1,
             save_best_only=True,
             save_weights_only=True,
-            mode="min",
+            mode="max",
             save_freq='epoch',
         )
         all_callbacks.append(checkpoint)
@@ -405,7 +407,7 @@ class CryoEmNet:
             monitor="accuracy",
             min_delta=0.0005,
             patience=nb_epoch_early,
-            mode="min",
+            mode="max",
             verbose=1,
         )
         all_callbacks.append(early_stop)
@@ -502,13 +504,13 @@ class CryoEmNet:
         path = str(os.getcwd()) + '/data/raw_data/' + image_name.name
         image = cv2.imread(str(path))
 
-        path = str(os.getcwd()) + '/data/label_data/' + image_name.stem + '.jpg'
+        path = str(os.getcwd()) + '/data/label_data/' + image_name.stem + '-points' + '.jpg'
         label_image = cv2.imread(path)
 
         resized_images = []
         resized_label_images = []
-        for i in range(224,1200,224):
-            for j in range(224,1200,224):
+        for i in range(224,682,224):
+            for j in range(224,960,224):
                 image_resize = image[i-224:i, j-224:j]
                 image_resize = image_resize.astype(float)
                 image_resize /= 255
@@ -527,7 +529,7 @@ class CryoEmNet:
 
         fig = plt.figure(figsize=(20, 8))
         
-        outer = gridspec.GridSpec(5, 5, wspace=0.2, hspace=0.5)
+        outer = gridspec.GridSpec(4, 3, wspace=0.2, hspace=0.5)
 
         for i in range(len(resized_images)):
             inner = gridspec.GridSpecFromSubplotSpec(1, 3,
