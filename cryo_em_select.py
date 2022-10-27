@@ -1,5 +1,4 @@
 from random import shuffle
-from xml.etree.ElementPath import prepare_predicate
 from keras.utils import Sequence
 from pathlib import Path
 import os
@@ -28,7 +27,7 @@ from keras.callbacks import (
     EarlyStopping, 
     ReduceLROnPlateau,
     TensorBoard,
-    SGDRScheduler
+    LearningRateScheduler
 )
 
 
@@ -110,8 +109,8 @@ class CryoBatchGenerator(Sequence):
                     First output is the original image scaled
                     Second output is the labels for the images
         """
-        image_name = os.path.basename(os.path.normpath(path))
-        label_path = Path(str(os.getcwd()) + '/data_example/label_annotation/' + image_name + '-points.csv')
+        image_name = path.name
+        label_path = Path(str(os.getcwd()) + '/data/label_annotation/' + path.stem + '-points' + '.csv')
 
         label_df = pd.read_csv(label_path, header=None)
         label_df = label_df.round(0).astype(int)
@@ -139,7 +138,7 @@ class CryoBatchGenerator(Sequence):
 
 
         if self.save_labels:
-            filename = Path(str(os.getcwd()) + '/data_example/label_data/' + image_name + '-points.csv-gauss_img.jpg')
+            filename = Path(str(os.getcwd()) + '/data/label_data/' + path.stem + '-points.jpg')
             #filename.touch(exist_ok=True)
             cv2.imwrite(str(filename), gauss_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
 
@@ -168,13 +167,13 @@ class CryoEmNet:
         self.batch_size = batch_size
         self.image_size = image_size
 
-        if model:
-            #self.model = self.build_preenc_convdec()
-            #self.model = self.build_unet()
-            self.model = self.small_unet()
+        if model is None:
+            # self.model = self.build_preenc_convdec()
+            # self.model = self.build_unet()
+            # self.model = self.small_unet()
 
             # Good base model
-            #self.model = self.build_basic_model()
+            self.model = self.build_basic_model()
 
             # Prob good model (Need more training)
             # self.model = self.build_custom_unet()
@@ -372,14 +371,14 @@ class CryoEmNet:
 
     def train(
         self, 
-        save_weights_name: Path,
+        filepath: Path=Path(str(os.getcwd())) / 'model' / 'checkpoint',
         nb_epoch_early=10,
         warmrestarts=True,
         learning_rate=10 ** -2, 
         epochs=10
     ):
         
-        data_path = [x for x in Path(str(os.getcwd()) + '/data_example/raw_data/').iterdir()]
+        data_path = [x for x in Path(str(os.getcwd()) + '/data/raw_data/').iterdir()]
 
         train_generator = CryoBatchGenerator(
             X=data_path,
@@ -392,18 +391,18 @@ class CryoEmNet:
         # Define callbacks
         all_callbacks = []
         checkpoint = ModelCheckpoint(
-            save_weights_name,
-            monitor="val_loss",
+            filepath=filepath,
+            monitor="accuracy",
             verbose=1,
             save_best_only=True,
             save_weights_only=True,
             mode="min",
-            period=1,
+            save_freq='epoch',
         )
         all_callbacks.append(checkpoint)
 
         early_stop = EarlyStopping(
-            monitor="val_loss",
+            monitor="accuracy",
             min_delta=0.0005,
             patience=nb_epoch_early,
             mode="min",
@@ -412,7 +411,7 @@ class CryoEmNet:
         all_callbacks.append(early_stop)
 
         reduceLROnPlateau = ReduceLROnPlateau(
-            monitor="val_loss",
+            monitor="accuracy",
             factor=0.1,
             patience=int(nb_epoch_early * 0.6),
             verbose=1,
@@ -436,28 +435,31 @@ class CryoEmNet:
         )
         tensorboard = TensorBoard(
             log_dir=os.path.expanduser("logs/") + "cinderella" + "_" + str(tb_counter),
-            histogram_freq=0,
+            histogram_freq=1,
             write_graph=True,
-            write_images=False,
+            write_images=True,
         )
         all_callbacks.append(tensorboard)
         if not warmrestarts:
             reduce_lr_on_plateau = ReduceLROnPlateau(
-                monitor="val_loss",
+                monitor="accuracy",
                 factor=0.1,
                 patience=int(nb_epoch_early * 0.6),
                 verbose=1,
             )
             all_callbacks.append(reduce_lr_on_plateau)
         else:
-            schedule = SGDRScheduler(
-                min_lr=1e-7,
-                max_lr=1e-4,
-                steps_per_epoch=len(train_generator),
-                lr_decay=0.9,
-                cycle_length=5,
-                mult_factor=1.5,
+            def scheduler(epochs, learning_rate):
+                if epochs < 10:
+                    return learning_rate
+                else:
+                    import tensorflow as tf
+                    return learning_rate * tf.math.exp(-0.1)
+            schedule = LearningRateScheduler(
+                schedule=scheduler,
+                verbose=True
             )
+            
             all_callbacks.append(schedule)
 
         optimizer = Adam(
@@ -473,12 +475,12 @@ class CryoEmNet:
             optimizer=optimizer, 
             loss='mse', 
             metrics=['accuracy'],
-            callbacks=all_callbacks
         )
 
         self.model.fit(
             train_generator,
-            epochs=epochs
+            epochs=epochs,
+            callbacks=all_callbacks
         )
 
     
@@ -494,13 +496,13 @@ class CryoEmNet:
 
     
 
-    def show_predictions(self, image_name):
+    def show_predictions(self, image_name:Path):
         import matplotlib.gridspec as gridspec
 
-        path = str(os.getcwd()) + '/data_example/raw_data/' + str(image_name)
+        path = str(os.getcwd()) + '/data/raw_data/' + image_name.name
         image = cv2.imread(str(path))
 
-        path = str(os.getcwd()) + '/data_example/label_data/' + str(image_name) + '-points.csv-gauss_img.jpg'
+        path = str(os.getcwd()) + '/data/label_data/' + image_name.stem + '.jpg'
         label_image = cv2.imread(path)
 
         resized_images = []
