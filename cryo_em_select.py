@@ -133,7 +133,7 @@ class CryoBatchGenerator(Sequence):
                 image = img[i-224:i, j-224:j]                
                 image = image.astype(float)
                 image /= 255.
-                image = (2 * image) - 1
+                #image = (2 * image) - 1
 
                 gauss_image = gauss_img[i-224:i, j-224:j]
                 gauss_image = gauss_image.astype(float)
@@ -574,6 +574,7 @@ class CryoEmNet:
 
         self.model.compile(
             optimizer=optimizer, 
+            # Loss='binary_crossentropy'
             loss='mse', 
             metrics=['accuracy'],
         )
