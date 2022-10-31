@@ -94,10 +94,11 @@ class CryoBatchGenerator(Sequence):
 
         # Collapse the first dimensions.
         X_batch = np.asarray(X_batch)
-        X_batch = X_batch.reshape(-1, *X_batch.shape[-3:])
+        
+        X_batch = X_batch.reshape(-1, *X_batch.shape[-2:])
         Y_batch = np.asarray(Y_batch)
         Y_batch = Y_batch.reshape(-1, *Y_batch.shape[-2:])
-
+        
         return X_batch, Y_batch
 
     def __get_input(self, path):
@@ -110,41 +111,44 @@ class CryoBatchGenerator(Sequence):
                     Second output is the labels for the images
         """
         label_path = Path(str(os.getcwd()) + '/data/label_annotation/' + path.stem + '-points' + '.csv')
+        if not label_path.exists:
+            return [],[]
+        label_df = pd.read_csv(label_path, header=None)
+        label_df = label_df.round(0).astype(int)
 
-        try:
-            label_df = pd.read_csv(label_path, header=None)
-            label_df = label_df.round(0).astype(int)
-
-            # Coordinate system turns in a weird way.
-            points = [(rows[1], rows[0]) for _, rows in label_df.iterrows()]
+        # Coordinate system turns in a weird way.
+        points = [(rows[1], rows[0]) for _, rows in label_df.iterrows()]
+    
+        #Load greyscale to remove the 3 channels
+        img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
         
-            img = cv2.imread(str(path))
-            gauss_img = preprocess.GaussianHighlight(img[:,:,0], points, 32)
+        gauss_img = preprocess.GaussianHighlight(img[:,:], points, 32)
+        # Apply edge detection
+        #img = cv2.Sobel(img, cv2.CV_8U, 1, 0, ksize=3)
 
-            cropped_images = []
-            cropped_label_images = []
-            for i in range(224,682,224):
-                for j in range(224,960,224):
-                    image = img[i-224:i, j-224:j]                
-                    image = image.astype(float)
-                    image /= 255.
+        cropped_images = []
+        cropped_label_images = []
+        for i in range(224,682,224):
+            for j in range(224,960,224):
+                image = img[i-224:i, j-224:j]                
+                image = image.astype(float)
+                image /= 255.
+                image = (2 * image) - 1
 
-                    gauss_image = gauss_img[i-224:i, j-224:j]
-                    gauss_image = gauss_image.astype(float)
-                    gauss_image /= 255.
+                gauss_image = gauss_img[i-224:i, j-224:j]
+                gauss_image = gauss_image.astype(float)
+                gauss_image /= 255.
 
-                    cropped_images.append(image)
-                    cropped_label_images.append(gauss_image)
+                cropped_images.append(image)
+                cropped_label_images.append(gauss_image)
 
 
-            if self.save_labels:
-                filename = Path(str(os.getcwd()) + '/data/label_data/' + path.stem + '-points.jpg')
-                if not filename.exists():
-                    cv2.imwrite(str(filename), gauss_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
+        if self.save_labels:
+            filename = Path(str(os.getcwd()) + '/data/label_data/' + path.stem + '-points.jpg')
+            if not filename.exists():
+                cv2.imwrite(str(filename), gauss_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
 
-            return cropped_images, cropped_label_images
-        except Exception:
-            return [], []
+        return cropped_images, cropped_label_images
     
     def __len__(self):
         """
@@ -175,10 +179,12 @@ class CryoEmNet:
             # self.model = self.small_unet()
 
             # Good base model
-            self.model = self.build_basic_model()
+            # self.model = self.build_basic_model()
 
             # Prob good model (Need more training)
             # self.model = self.build_custom_unet()
+            
+            self.model = self.build_large_unet()
             
 
         else:
@@ -326,6 +332,96 @@ class CryoEmNet:
     def build_convolutional(self):
         pass
 
+    
+    def build_large_unet(self):
+        inputs = Input(shape=self.image_size)
+
+        # Encoder
+        # Layer 1
+        convolution_1 = self.__convolution_layer(inputs,filters=8)
+        pooling_1 = MaxPooling2D(pool_size=(2, 2))(convolution_1)
+
+        # Layer 2
+        convolution_2 = self.__convolution_layer(pooling_1,filters=16)
+        pooling_2 = MaxPooling2D(pool_size=(2, 2))(convolution_2)
+
+        # Layer 3
+        convolution_3 = self.__convolution_layer(pooling_2,filters=32)
+
+        # Layer 4
+        convolution_4 = self.__convolution_layer(convolution_3,filters=16)
+
+        # Layer 5
+        convolution_5 = self.__convolution_layer(convolution_4,filters=32)
+        pooling_3 = MaxPooling2D(pool_size=(2,2))(convolution_5)
+
+        # Layer 6
+        convolution_6 = self.__convolution_layer(pooling_3,filters=64)
+
+        # Layer 7
+        convolution_7 = self.__convolution_layer(convolution_6,filters=32)
+
+        # Layer 8
+        convolution_8 = self.__convolution_layer(convolution_7, filters=64)
+        pooling_4 = MaxPooling2D(pool_size=(2,2))(convolution_8)
+
+        # Layer 9
+        convolution_9 = self.__convolution_layer(pooling_4, filters=128)
+
+        # Layer 10
+        convolution_10 = self.__convolution_layer(convolution_9, filters=64)
+        
+        # Layer 11
+        convolution_11 = self.__convolution_layer(convolution_10, filters=128)
+
+        # Layer 12
+        convolution_12 = self.__convolution_layer(convolution_11, filters=64)
+        
+        # Layer 13
+        convolution_13 = self.__convolution_layer(convolution_12, filters=128)
+
+        # Layer 14
+        convolution_14 = self.__convolution_layer(convolution_13, filters=64)
+
+        # Layer 15
+        convolution_15 = self.__convolution_layer(convolution_14, filters=128)
+
+        # Decoder
+        # Layer 16
+        convolution_16 = self.__convolution_layer(convolution_15, filters=64)
+        upsampling_1 = UpSampling2D(size = (2,2))(convolution_16)
+        merge_1 = concatenate([convolution_7,upsampling_1], axis = 3) 
+
+        # Layer 17
+        convolution_17 = self.__convolution_layer(merge_1, filters=32)
+
+        # Layer 18
+        convolution_18 = self.__convolution_layer(convolution_17, filters=64)
+
+        # Layer 19
+        convolution_19 = self.__convolution_layer(convolution_18, filters=32)
+        upsampling_2 = UpSampling2D(size = (2,2))(convolution_19)
+        merge_2 = concatenate([convolution_4,upsampling_2], axis = 3) 
+
+        # Layer 20
+        convolution_20 = self.__convolution_layer(merge_2, filters=16)
+        upsampling_3 = UpSampling2D(size = (2,2))(convolution_20)
+        merge_3 = concatenate([convolution_2,upsampling_3], axis = 3) 
+
+        # Layer 21
+        convolution_21 = self.__convolution_layer(merge_3, filters=16)
+        upsampling_4 = UpSampling2D(size = (2,2))(convolution_21)
+        merge_4 = concatenate([convolution_1,upsampling_4], axis = 3)
+
+
+        outputs = Conv2D(1, 1, activation = 'sigmoid')(merge_4)
+        
+        # Specify model
+        large_unet = Model(inputs=inputs, outputs=outputs)
+        large_unet.summary()
+
+        return large_unet
+    
     def build_unet(self):
         inputs = Input(shape=self.image_size)
 
@@ -377,7 +473,9 @@ class CryoEmNet:
         nb_epoch_early=10,
         warmrestarts=True,
         learning_rate=10 ** -2, 
-        epochs=10
+        epochs=10,
+        save_log=True,
+        save_model=True
     ):
         
         data_path = [x for x in Path(str(os.getcwd()) + '/data/raw_data/').iterdir()]
@@ -392,16 +490,17 @@ class CryoEmNet:
 
         # Define callbacks
         all_callbacks = []
-        checkpoint = ModelCheckpoint(
-            filepath=filepath,
-            monitor="accuracy",
-            verbose=1,
-            save_best_only=True,
-            save_weights_only=True,
-            mode="max",
-            save_freq='epoch',
-        )
-        all_callbacks.append(checkpoint)
+        if save_model:
+            checkpoint = ModelCheckpoint(
+                filepath=filepath,
+                monitor="accuracy",
+                verbose=1,
+                save_best_only=True,
+                save_weights_only=True,
+                mode="max",
+                save_freq='epoch',
+            )
+            all_callbacks.append(checkpoint)
 
         early_stop = EarlyStopping(
             monitor="accuracy",
@@ -419,29 +518,29 @@ class CryoEmNet:
             verbose=1,
         )
         all_callbacks.append(reduceLROnPlateau)
+        if save_log:
+            try:
+                os.makedirs(os.path.expanduser("logs/"))
+            except:
+                pass
 
-        try:
-            os.makedirs(os.path.expanduser("logs/"))
-        except:
-            pass
-
-        tb_counter = (
-            len(
-                [
-                    log
-                    for log in os.listdir(os.path.expanduser("logs/"))
-                    if "cinderella" in log
-                ]
+            tb_counter = (
+                len(
+                    [
+                        log
+                        for log in os.listdir(os.path.expanduser("logs/"))
+                        if "cinderella" in log
+                    ]
+                )
+                + 1
             )
-            + 1
-        )
-        tensorboard = TensorBoard(
-            log_dir=os.path.expanduser("logs/") + "cinderella" + "_" + str(tb_counter),
-            histogram_freq=1,
-            write_graph=True,
-            write_images=True,
-        )
-        all_callbacks.append(tensorboard)
+            tensorboard = TensorBoard(
+                log_dir=os.path.expanduser("logs/") + "cinderella" + "_" + str(tb_counter),
+                histogram_freq=1,
+                write_graph=True,
+                write_images=True,
+            )
+            all_callbacks.append(tensorboard)
         if not warmrestarts:
             reduce_lr_on_plateau = ReduceLROnPlateau(
                 monitor="accuracy",
@@ -502,7 +601,7 @@ class CryoEmNet:
         import matplotlib.gridspec as gridspec
 
         path = str(os.getcwd()) + '/data/raw_data/' + image_name.name
-        image = cv2.imread(str(path))
+        image = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
 
         path = str(os.getcwd()) + '/data/label_data/' + image_name.stem + '-points' + '.jpg'
         label_image = cv2.imread(path)
@@ -525,7 +624,7 @@ class CryoEmNet:
         resized_images = np.asarray(resized_images)
         resized_label_images = np.asarray(resized_label_images)
         
-        out = self.predict(resized_images[:,:,:,:])
+        out = self.predict(resized_images[:,:,:])
 
         fig = plt.figure(figsize=(20, 8))
         
@@ -536,14 +635,14 @@ class CryoEmNet:
                             subplot_spec=outer[i], wspace=0.2, hspace=0.5)
 
             ax = plt.Subplot(fig, inner[0])
-            ax.imshow(resized_images[i,:,:,:], cmap='gray')
+            ax.imshow(resized_images[i,:,:], cmap='gray')
             ax.set_title('Input image', fontsize=10)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
             fig.add_subplot(ax)
 
             ax = plt.Subplot(fig, inner[1])
-            ax.imshow(out[i,:,:,:],vmin=0,vmax=1, cmap='gray')
+            ax.imshow(out[i,:,:],vmin=0,vmax=1, cmap='gray')
             ax.set_title('Predicted', fontsize=10)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
