@@ -37,7 +37,7 @@ class CryoBatchGenerator(Sequence):
     and create the labels from the .csv files. 
     """
 
-    def __init__(self, X, batch_size, image_size=(224,224,3), shuffle=False, save_labels=False):
+    def __init__(self, X, batch_size, image_size=(224,224,1), shuffle=False, save_labels=False):
         """
         Initialize a batch generator.
 
@@ -94,11 +94,12 @@ class CryoBatchGenerator(Sequence):
 
         # Collapse the first dimensions.
         X_batch = np.asarray(X_batch)
-        
-        X_batch = X_batch.reshape(-1, *X_batch.shape[-2:])
+        X_batch = np.concatenate(X_batch, axis=0)
+
         Y_batch = np.asarray(Y_batch)
-        Y_batch = Y_batch.reshape(-1, *Y_batch.shape[-2:])
-        
+        Y_batch = np.concatenate(Y_batch,axis=0)
+
+
         return X_batch, Y_batch
 
     def __get_input(self, path):
@@ -110,6 +111,9 @@ class CryoBatchGenerator(Sequence):
                     First output is the original image scaled
                     Second output is the labels for the images
         """
+        image_height = 622
+        image_width = 900
+
         label_path = Path(str(os.getcwd()) + '/data/label_annotation/' + path.stem + '-points' + '.csv')
         if not label_path.exists:
             return [],[]
@@ -121,21 +125,25 @@ class CryoBatchGenerator(Sequence):
     
         #Load greyscale to remove the 3 channels
         img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
-        
+
         gauss_img = preprocess.GaussianHighlight(img[:,:], points, 32)
+
+        img = img[30:-30,30:-30]
+        gauss_img = gauss_img[30:-30,30:-30]
         # Apply edge detection
         #img = cv2.Sobel(img, cv2.CV_8U, 1, 0, ksize=3)
 
         cropped_images = []
         cropped_label_images = []
-        for i in range(224,682,224):
-            for j in range(224,960,224):
-                image = img[i-224:i, j-224:j]                
+        # 682, 960
+        for i in range(self.image_size[0],image_height,self.image_size[0]):
+            for j in range(self.image_size[1],image_width,self.image_size[1]):
+                image = img[i-self.image_size[0]:i, j-self.image_size[1]:j]                
                 image = image.astype(float)
                 image /= 255.
                 #image = (2 * image) - 1
 
-                gauss_image = gauss_img[i-224:i, j-224:j]
+                gauss_image = gauss_img[i-self.image_size[0]:i, j-self.image_size[1]:j]
                 gauss_image = gauss_image.astype(float)
                 gauss_image /= 255.
 
@@ -165,7 +173,7 @@ class CryoEmNet:
     This is our cryo-em segmentation class
     """
     
-    def __init__(self, batch_size, image_size, model=None):
+    def __init__(self, batch_size, image_size=(224,224,1), model=None):
         """
         :param batch_size: Batch size for training / prediction
         :param input_size: Input image size
@@ -600,36 +608,39 @@ class CryoEmNet:
 
     def show_predictions(self, image_name:Path):
         import matplotlib.gridspec as gridspec
+        image_height = 622
+        image_width = 900
 
         path = str(os.getcwd()) + '/data/raw_data/' + image_name.name
         image = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
 
         path = str(os.getcwd()) + '/data/label_data/' + image_name.stem + '-points' + '.jpg'
-        label_image = cv2.imread(path)
+        label_image = cv2.imread(str(path))
 
         resized_images = []
         resized_label_images = []
-        for i in range(224,682,224):
-            for j in range(224,960,224):
-                image_resize = image[i-224:i, j-224:j]
+        # 682, 960
+        for i in range(self.image_size[0],image_height,self.image_size[0]):
+            for j in range(self.image_size[1],image_width,self.image_size[1]):
+                image_resize = image[i-self.image_size[0]:i, j-self.image_size[1]:j]
                 image_resize = image_resize.astype(float)
-                image_resize /= 255
+                image_resize /= 255.
 
-                label_image_resize = label_image[i-224:i, j-224:j]
+                label_image_resize = label_image[i-self.image_size[0]:i, j-self.image_size[1]:j]
                 label_image_resize= label_image_resize.astype(float)
-                label_image_resize /= 255
+                label_image_resize /= 255.
 
                 resized_images.append(image_resize)
                 resized_label_images.append(label_image_resize)
 
-        resized_images = np.asarray(resized_images)
+        resized_images = np.asarray(resized_images)    
         resized_label_images = np.asarray(resized_label_images)
         
         out = self.predict(resized_images[:,:,:])
 
         fig = plt.figure(figsize=(20, 8))
         
-        outer = gridspec.GridSpec(4, 3, wspace=0.2, hspace=0.5)
+        outer = gridspec.GridSpec(image_width // self.image_size[1], image_height // self.image_size[0], wspace=0.2, hspace=0.5)
 
         for i in range(len(resized_images)):
             inner = gridspec.GridSpecFromSubplotSpec(1, 3,

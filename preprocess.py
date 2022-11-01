@@ -1,5 +1,14 @@
 import numpy as np
 
+def gkern(l=5, sig=1.):
+    """\
+    creates gaussian kernel with side length `l` and a sigma of `sig`
+    """
+    ax = np.linspace(-(l - 1) / 2., (l - 1) / 2., l)
+    gauss = np.exp(-0.5 * np.square(ax) / np.square(sig))
+    kernel = np.outer(gauss, gauss)
+    return kernel / np.sum(kernel)
+
 def GaussianHighlight(image, coordinates, diameter):
   new_image = np.zeros(image.shape, dtype=np.uint64)
   if diameter%2 == 0:
@@ -10,7 +19,7 @@ def GaussianHighlight(image, coordinates, diameter):
   outerColor = (0, 0, 0)
 
 
-  # kernel = gkern(l=diameter)
+  # kernel = gkern(l=100)
   # kernel = kernel * 255
 
   for y in range(imgsize[1]):
@@ -22,13 +31,13 @@ def GaussianHighlight(image, coordinates, diameter):
         distanceToCenter = distanceToCenter / (np.sqrt(2) * imgsize[0]/2)
 
         #Calculate r, g, and b values
-        # r = outerColor[0] * distanceToCenter + innerColor[0] * (1 - distanceToCenter)
-        # g = outerColor[1] * distanceToCenter + innerColor[1] * (1 - distanceToCenter)
-        # b = outerColor[2] * distanceToCenter + innerColor[2] * (1 - distanceToCenter)
+        r = outerColor[0] * distanceToCenter + innerColor[0] * (1 - distanceToCenter)
+        g = outerColor[1] * distanceToCenter + innerColor[1] * (1 - distanceToCenter)
+        b = outerColor[2] * distanceToCenter + innerColor[2] * (1 - distanceToCenter)
 
-        r = 255
-        g = 255
-        b = 255
+        # r = 255
+        # g = 255
+        # b = 255
         
         # r = kernel[y,x]
         # g = kernel[y,x]
