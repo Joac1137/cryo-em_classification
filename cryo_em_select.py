@@ -116,7 +116,7 @@ class CryoBatchGenerator(Sequence):
         image_width = 900
 
         label_path = Path(str(os.getcwd()) + '/data/label_annotation/' + path.stem + '-points' + '.csv')
-        if not label_path.exists:
+        if not label_path.exists():
             return [],[]
         label_df = pd.read_csv(label_path, header=None)
         label_df = label_df.round(0).astype(int)
@@ -142,6 +142,7 @@ class CryoBatchGenerator(Sequence):
                 image = img[i-self.image_size[0]:i, j-self.image_size[1]:j]                
                 image = image.astype(float)
                 image /= 255.
+                # Zero center image
                 image = (image - image.mean()) / image.std()
                 #image = (2 * image) - 1
 
@@ -346,6 +347,13 @@ class CryoEmNet:
     
     def build_large_unet(self):
         inputs = Input(shape=self.image_size)
+
+        # Eacly have larger filters and then reduce the size in later layers
+        # Maybe apply 1x1 convolution in order to do dimension reduction
+        
+        # Maybe apply residual connections
+
+        # Apply skip connection in order to fix vanishing gradiant problem
 
         # Encoder
         # Layer 1
@@ -597,7 +605,17 @@ class CryoEmNet:
             callbacks=all_callbacks
         )
 
-    
+
+        folder = Path(os.getcwd()) / 'data' / 'label_data'
+        for filename in folder.listdir():
+            file_path = folder / Path(filename)
+            try:
+                if file_path.exists():
+                    os.remove(str(file_path))
+            except Exception as e:
+                print('Failed to delete %s. Reason: %s' % (file_path, e))
+
+
     def predict(self, img):
         # Predict should divide and conquer... and then assemble again
         
@@ -629,6 +647,7 @@ class CryoEmNet:
                 image_resize = image[i-self.image_size[0]:i, j-self.image_size[1]:j]
                 image_resize = image_resize.astype(float)
                 image_resize /= 255.
+                # Zero center image
                 image_resize = (image_resize - image_resize.mean()) / image_resize.std()
 
                 label_image_resize = label_image[i-self.image_size[0]:i, j-self.image_size[1]:j]

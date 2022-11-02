@@ -29,7 +29,8 @@ _Note_: Some package might not install because of _Windows Long Paths_. Solved [
     The performance is drastically reduced when using the gaussian distribution on the points instead. We are working on how we might fix this. 
 
 - What are the next steps? <br>
-    The next steps is definitely to setup the experiments in a more systematic manner. We then further aim to train all the different models on the entires dataset on a server that we have available. Thereafter, we might just analyze, finetune and rerun the experiments and then begin the report.  
+    The next steps is definitely to setup the experiments in a more systematic manner. We then further aim to train all the different models on the entires dataset on a server that we have available. Thereafter, we might just analyze, finetune and rerun the experiments and then begin the report. 
+    We have also considered using more residual connections and further add 1x1 convolutions. 
 
 - Any uncertainties or issues you need help with? <br>
     When designing the large_unet it is very difficult to determine the specific number of layers that we should include. Is there a rule of thumb or do we just have to try and observe the results?
