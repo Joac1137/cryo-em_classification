@@ -142,6 +142,7 @@ class CryoBatchGenerator(Sequence):
                 image = img[i-self.image_size[0]:i, j-self.image_size[1]:j]                
                 image = image.astype(float)
                 image /= 255.
+                image = (image - image.mean()) / image.std()
                 #image = (2 * image) - 1
 
                 gauss_image = gauss_img[i-self.image_size[0]:i, j-self.image_size[1]:j]
@@ -628,6 +629,7 @@ class CryoEmNet:
                 image_resize = image[i-self.image_size[0]:i, j-self.image_size[1]:j]
                 image_resize = image_resize.astype(float)
                 image_resize /= 255.
+                image_resize = (image_resize - image_resize.mean()) / image_resize.std()
 
                 label_image_resize = label_image[i-self.image_size[0]:i, j-self.image_size[1]:j]
                 label_image_resize= label_image_resize.astype(float)
