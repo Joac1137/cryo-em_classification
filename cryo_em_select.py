@@ -37,7 +37,7 @@ class CryoBatchGenerator(Sequence):
     and create the labels from the .csv files. 
     """
 
-    def __init__(self, X, batch_size, image_size=(224,224,1), shuffle=False, save_labels=False):
+    def __init__(self, X, batch_size, image_size=(224,224,1), shuffle=False, save_labels=False, gauss_label=False):
         """
         Initialize a batch generator.
 
@@ -53,6 +53,7 @@ class CryoBatchGenerator(Sequence):
         self.image_size = image_size
         self.shuffle = shuffle
         self.save_labels = save_labels
+        self.gauss_label = gauss_label
         self.n = len(X)
 
     def on_epoch_end(self):
@@ -126,7 +127,7 @@ class CryoBatchGenerator(Sequence):
         #Load greyscale to remove the 3 channels
         img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
 
-        gauss_img = preprocess.GaussianHighlight(img[:,:], points, 32)
+        gauss_img = preprocess.GaussianHighlight(img[:,:], points, 32, self.gauss_label)
 
         img = img[30:-30,30:-30]
         gauss_img = gauss_img[30:-30,30:-30]
@@ -173,13 +174,14 @@ class CryoEmNet:
     This is our cryo-em segmentation class
     """
     
-    def __init__(self, batch_size, image_size=(224,224,1), model=None):
+    def __init__(self, batch_size, image_size=(224,224,1), model=None, gauss_label=False):
         """
         :param batch_size: Batch size for training / prediction
         :param input_size: Input image size
         """
         self.batch_size = batch_size
         self.image_size = image_size
+        self.gauss_label = gauss_label
 
         if model is None:
             # self.model = self.build_preenc_convdec()
@@ -493,7 +495,8 @@ class CryoEmNet:
             batch_size=self.batch_size,
             image_size=self.image_size,
             shuffle=True,
-            save_labels=True
+            save_labels=True,
+            gauss_label=self.gauss_label
         )
 
         # Define callbacks
