@@ -486,12 +486,17 @@ class CryoEmNet:
         Function that trains the CryoEmNet model. Method also handles all callback functionality, specify the model optimizer and compilers the model.
         
         :param filepath: Path to where we save the model
-        :param nb_epoch_early: Number of epochs before we consider early stopping. 
-        
+        :param nb_epoch_early: Number of epochs before we consider early stopping. This is also used when considering if we should reduce the learning rate on a plateau.
+        :param warmrestarts:  This warm-starting approach enables us to start training from a better initial point on the loss surface and often learn better models
+        :param learning_rate: The model learning rate
+        :param epochs: Number of epochs
+        :param save_log: Whether to save the log file
+        :param save_model: Whether to save the model
         """
-        
         data_path = [x for x in Path(str(os.getcwd()) + '/data/raw_data/').iterdir()]
         data_path = data_path[:100]
+
+        # Generator with the training data
         train_generator = CryoBatchGenerator(
             X=data_path[:int(len(data_path) * 0.8)],
             batch_size=self.batch_size,
@@ -501,6 +506,7 @@ class CryoEmNet:
             gauss_label=self.gauss_label
         )
 
+        # Generator with the validation data
         validation_generator = CryoBatchGenerator(
             X=data_path[int(len(data_path) * 0.8):],
             batch_size=self.batch_size,
@@ -585,6 +591,7 @@ class CryoEmNet:
             
             all_callbacks.append(schedule)
 
+        # Model optimizer
         optimizer = Adam(
             learning_rate=learning_rate,
             beta_1=0.9,
@@ -596,7 +603,6 @@ class CryoEmNet:
 
         self.model.compile(
             optimizer=optimizer, 
-            # Loss='binary_crossentropy'
             loss='mse', 
             metrics=['accuracy'],
         )
@@ -608,7 +614,7 @@ class CryoEmNet:
             callbacks=all_callbacks
         )
 
-
+        # Functionality to delete the label data from the label_data folder
         # folder = Path(os.getcwd()) / 'data' / 'label_data'
         # for filename in folder.iterdir():
         #     file_path = folder / Path(filename)
@@ -618,16 +624,24 @@ class CryoEmNet:
         #     except Exception as e:
         #         print('Failed to delete %s. Reason: %s' % (file_path, e))
 
-
     def predict(self, img):
-        # Predict should divide and conquer... and then assemble again
-        
+        """
+        Method to enable the model to predict on an given image
+
+        :param img: Image to predict
+
+        :return: The result of the model prediction on the given image
+        """
         result = self.model.predict(img)
 
         return result
         
-
     def show_history(history):
+        """
+        Method to show the history of the model
+
+        :param history: History of the model form fitting
+        """
         plt.figure(figsize=(20,6))
 
         # summarize history for accuracy
@@ -647,11 +661,14 @@ class CryoEmNet:
         plt.ylabel('loss')
         plt.xlabel('epoch')
         plt.legend(['train', 'test'], loc='upper left')
-        plt.show()
-
-    
+        plt.show()    
 
     def show_predictions(self, image_name:Path):
+        """
+        Method that shows the predictions on a given image. 
+
+        :param image_name: The Path of the input image
+        """
         import matplotlib.gridspec as gridspec
         image_height = 622
         image_width = 900
