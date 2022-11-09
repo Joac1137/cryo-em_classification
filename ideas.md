@@ -26,3 +26,16 @@
         - Has the same effect of down-sampling by a factor of two (like max pooling normally does), but information is not thrown away in the same way as with max pooling.
 - Dice loss / Intersection-over-Union
 - See for instance slides from lecture 6 about hyperparameter tuning.
+- Eacly have larger filters and then reduce the size in later layers
+- Maybe apply 1x1 convolution in order to do dimension reduction
+- Apply skip connection in order to fix vanishing gradiant problem
+- Use add instead of concatenate
+- Might change accuracy to val_loss in callbacks
+
+# Experiments
+- Large unet model
+    - Dice loss vs mse
+- Compare models
+    - Large unet model
+    - basic model
+    - large residual unet model

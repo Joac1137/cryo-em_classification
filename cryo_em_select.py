@@ -16,6 +16,7 @@ from keras.layers import (
     LeakyReLU,
     GlobalAveragePooling2D,
     Flatten,
+    Add,
     concatenate, 
     Input
 )
@@ -100,7 +101,6 @@ class CryoBatchGenerator(Sequence):
         Y_batch = np.asarray(Y_batch)
         Y_batch = np.concatenate(Y_batch,axis=0)
 
-
         return X_batch, Y_batch
 
     def __get_input(self, path):
@@ -170,7 +170,6 @@ class CryoBatchGenerator(Sequence):
         return self.n // self.batch_size
 
 
-
 class CryoEmNet:
     """
     This is our cryo-em segmentation class
@@ -186,70 +185,82 @@ class CryoEmNet:
         self.gauss_label = gauss_label
 
         if model is None:
-            # self.model = self.build_preenc_convdec()
             # self.model = self.build_unet()
-            # self.model = self.small_unet()
 
             # Good base model
             # self.model = self.build_basic_model()
 
             # Prob good model (Need more training)
-            # self.model = self.build_custom_unet()
+            # self.model = self.small_unet()
             
             self.model = self.build_large_unet()
-            
-
         else:
             self.model = model
 
     def __convolution_layer(self, x, filters, kernel_size=3, padding='same', kernel_initializer='he_normal'):
+        """
+        General convolution layer block that applies a convolution, batch normalization and further a activation function 
+
+        :param x: Input tensor
+        :param filters: Integer, the dimensionality of the output space 
+        :param kernel_size: An integer or tuple/list of 2 integers, specifying the height and width of the 2D convolution window
+        :param padding: Padding scheme
+        :param kernel_initializer: Regularizer function
+
+        :return: Returns a tensor from the convolution layers
+        """
         x = Conv2D(filters, kernel_size, padding=padding, kernel_initializer=kernel_initializer)(x)
         x = BatchNormalization()(x)
         x = LeakyReLU(alpha=0.1)(x)
-        #x = Activation('relu')(x)
         return x
 
-    def build_preenc_convdec(self):
-        from keras.applications.mobilenet_v2 import MobileNetV2
-        conv_base = MobileNetV2(weights='imagenet',
-                      include_top=False,
-                      input_shape=(224,224,3))
-
-        # Decoder
-        encoder = conv_base.output
+    def __residual_module_type1(x, filters=64):
+        """
+        Creates a residual module of type 1
         
-        convolution_layer = self.__convolution_layer(encoder, filters=32)
-        upsampling = UpSampling2D(size = (2,2))(convolution_layer)
+        :param x: Input tensor
+        :param filters: Integer, the dimensionality of the output space 
 
-        convolution_layer = self.__convolution_layer(upsampling, filters=16)
-        upsampling = UpSampling2D(size = (2,2))(convolution_layer)
-
-        convolution_layer = self.__convolution_layer(upsampling, filters=8)
-        upsampling = UpSampling2D(size = (2,2))(convolution_layer)
-
-        convolution_layer = self.__convolution_layer(upsampling, filters=4)
-        upsampling = UpSampling2D(size = (2,2))(convolution_layer)
-
-        convolution_layer = self.__convolution_layer(upsampling, filters=2)
-        upsampling = UpSampling2D(size = (2,2))(convolution_layer)
+        :return: Return output from the residual module type 1
+        """
+        conv1 = Conv2D(filters, (3,3), padding='same', activation='relu', kernel_initializer='he_normal')(x)
+        conv2 = Conv2D(filters, (3,3), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
         
-        output = Conv2D(1, 1, activation = 'sigmoid')(upsampling)
+        # Add filters, assumes conv2 and x have the same shape
+        y = Add()([conv2, x])
+
+        # Activation function
+        y = LeakyReLU(alpha=0.1)(y)
+        return y
+
+    def __residual_module_type2(x, filters=64):
+        """
+        Creates a residual module of type 2
         
-        model = Model(conv_base.input, output)
+        :param x: Input tensor
+        :param filters: Integer, the dimensionality of the output space 
 
+        :return: Return output from the residual module type 2
+        """
+        # conv1 (reduces height/width by a factor of two and doubles the number of channels)
+        conv1 = Conv2D(2*filters, (3,3), strides=2, padding='same', activation='relu', kernel_initializer='he_normal')(x)
+        # conv2 (same shape as conv1)
+        conv2 = Conv2D(2*filters, (3,3), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
+        # reshape x (same shape as conv2)
+        x_reshape = Conv2D(2*filters, (1,1), strides=2,activation='linear')(x)
+        # add filters, assumes conv2 and x have the same shape
+        y = Add()([conv2, x_reshape])
+        # Activation function
 
-        num_base_layers = len(conv_base.layers)
-        for layer in model.layers[:num_base_layers]:
-            layer.trainable=False
-        for layer in model.layers[num_base_layers:]:
-            layer.trainable=True
-
-        model.summary()
-
-        return model
-        
+        y = LeakyReLU(alpha=0.1)(y)
+        return y
 
     def build_basic_model(self):
+        """
+        Creates a basic model that intentionally don't have skip connections
+
+        :return: Basic segmentation model 
+        """
         inputs = Input(shape=self.image_size)
 
         # Encoder
@@ -264,10 +275,8 @@ class CryoEmNet:
         # Decoder
         convolution_5 = self.__convolution_layer(convolution_4,filters=32)
         upsampling_1 = UpSampling2D(size = (2,2))(convolution_5)
-        
         convolution_6 = self.__convolution_layer(upsampling_1,filters=16)
         upsampling_2 = UpSampling2D(size = (2,2))(convolution_6)
-        
         convolution_7 = self.__convolution_layer(upsampling_2,filters=8)
         upsampling_3 = UpSampling2D(size = (2,2))(convolution_7)
 
@@ -278,9 +287,13 @@ class CryoEmNet:
         basic_model.summary()
 
         return basic_model
-
     
     def small_unet(self):
+        """
+        Creates a small unet model that indeed does have skip connections
+
+        :return: Small unet model
+        """
         inputs = Input(shape=self.image_size)
 
         # Encoder
@@ -308,52 +321,21 @@ class CryoEmNet:
 
         return small_unet
 
-
-    def build_custom_unet(self):
-        inputs = Input(shape=self.image_size)
-
-        # Encoder
-        convolution_1 = self.__convolution_layer(inputs,filters=8)
-        pooling_1 = MaxPooling2D(pool_size=(2, 2))(convolution_1)
-        convolution_2 = self.__convolution_layer(pooling_1,filters=16)
-        pooling_2 = MaxPooling2D(pool_size=(2, 2))(convolution_2)
-        convolution_3 = self.__convolution_layer(pooling_2,filters=32)
-        pooling_3 = MaxPooling2D(pool_size=(2, 2))(convolution_3)
-        convolution_4 = self.__convolution_layer(pooling_3,filters=64)
-
-        # Decoder
-        convolution_5 = self.__convolution_layer(convolution_4,filters=32)
-        upsampling_1 = UpSampling2D(size = (2,2))(convolution_5)
-        merge_1 = concatenate([convolution_3,upsampling_1], axis = 3)
-        convolution_6 = self.__convolution_layer(merge_1,filters=16)
-        upsampling_2 = UpSampling2D(size = (2,2))(convolution_6)
-        merge_2 = concatenate([convolution_2,upsampling_2], axis = 3)
-        convolution_7 = self.__convolution_layer(merge_2,filters=8)
-        upsampling_3 = UpSampling2D(size = (2,2))(convolution_7)
-        merge_3 = concatenate([convolution_1,upsampling_3], axis = 3)
-
-        outputs = Conv2D(1, 1, activation = 'sigmoid')(merge_3)
-
-        # Specify model
-        custom_unet = Model(inputs=inputs, outputs=outputs)
-        custom_unet.summary()
-
-        return custom_unet
-    
-
-    def build_convolutional(self):
-        pass
-
+    def build_large_residual_unet(self):
+        """
+        Creates a large unet segmentation model that applies both the residual type 1 and 2 modules. Further the model should also include skip connections
+        
+        :return: Large unet residual segmentation model
+        """
+        pass 
     
     def build_large_unet(self):
-        inputs = Input(shape=self.image_size)
-
-        # Eacly have larger filters and then reduce the size in later layers
-        # Maybe apply 1x1 convolution in order to do dimension reduction
+        """
+        Creates a large unet segmentation model. We have extended the amount of layers, but still have only a few skip connections. 
         
-        # Maybe apply residual connections
-
-        # Apply skip connection in order to fix vanishing gradiant problem
+        :return: Large unet segmentation model
+        """
+        inputs = Input(shape=self.image_size)
 
         # Encoder
         # Layer 1
@@ -432,7 +414,6 @@ class CryoEmNet:
         upsampling_4 = UpSampling2D(size = (2,2))(convolution_21)
         merge_4 = concatenate([convolution_1,upsampling_4], axis = 3)
 
-
         outputs = Conv2D(1, 1, activation = 'sigmoid')(merge_4)
         
         # Specify model
@@ -442,6 +423,11 @@ class CryoEmNet:
         return large_unet
     
     def build_unet(self):
+        """
+        Creates a unet model that has some intermediate convolutions, such that it becomes a bit larger
+
+        :return: Unet segmentation model
+        """
         inputs = Input(shape=self.image_size)
 
         # Encoder
@@ -496,11 +482,27 @@ class CryoEmNet:
         save_log=True,
         save_model=True
     ):
+        """
+        Function that trains the CryoEmNet model. Method also handles all callback functionality, specify the model optimizer and compilers the model.
+        
+        :param filepath: Path to where we save the model
+        :param nb_epoch_early: Number of epochs before we consider early stopping. 
+        
+        """
         
         data_path = [x for x in Path(str(os.getcwd()) + '/data/raw_data/').iterdir()]
-
+        data_path = data_path[:100]
         train_generator = CryoBatchGenerator(
-            X=data_path[:100],
+            X=data_path[:int(len(data_path) * 0.8)],
+            batch_size=self.batch_size,
+            image_size=self.image_size,
+            shuffle=True,
+            save_labels=True,
+            gauss_label=self.gauss_label
+        )
+
+        validation_generator = CryoBatchGenerator(
+            X=data_path[int(len(data_path) * 0.8):],
             batch_size=self.batch_size,
             image_size=self.image_size,
             shuffle=True,
@@ -601,19 +603,20 @@ class CryoEmNet:
 
         self.model.fit(
             train_generator,
+            validation_data=validation_generator,
             epochs=epochs,
             callbacks=all_callbacks
         )
 
 
-        folder = Path(os.getcwd()) / 'data' / 'label_data'
-        for filename in folder.listdir():
-            file_path = folder / Path(filename)
-            try:
-                if file_path.exists():
-                    os.remove(str(file_path))
-            except Exception as e:
-                print('Failed to delete %s. Reason: %s' % (file_path, e))
+        # folder = Path(os.getcwd()) / 'data' / 'label_data'
+        # for filename in folder.iterdir():
+        #     file_path = folder / Path(filename)
+        #     try:
+        #         if file_path.exists():
+        #             os.remove(str(file_path))
+        #     except Exception as e:
+        #         print('Failed to delete %s. Reason: %s' % (file_path, e))
 
 
     def predict(self, img):
@@ -624,7 +627,27 @@ class CryoEmNet:
         return result
         
 
+    def show_history(history):
+        plt.figure(figsize=(20,6))
 
+        # summarize history for accuracy
+        plt.subplot(121)
+        plt.plot(history.history['accuracy'])
+        plt.plot(history.history['val_accuracy'])
+        plt.title('model accuracy')
+        plt.ylabel('accuracy')
+        plt.xlabel('epoch')
+        plt.legend(['train', 'test'], loc='upper left')
+
+        # summarize history for loss
+        plt.subplot(122)
+        plt.plot(history.history['loss'])
+        plt.plot(history.history['val_loss'])
+        plt.title('model loss')
+        plt.ylabel('loss')
+        plt.xlabel('epoch')
+        plt.legend(['train', 'test'], loc='upper left')
+        plt.show()
 
     
 
