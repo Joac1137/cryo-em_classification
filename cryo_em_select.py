@@ -41,7 +41,7 @@ class CryoBatchGenerator(Sequence):
     and create the labels from the .csv files. 
     """
 
-    def __init__(self, X, batch_size, image_size=(224,224,1), shuffle=False, save_labels=False, gauss_label=False):
+    def __init__(self, X, batch_size, image_size=(224,224,1), shuffle=False, save_labels=False, label_type='gauss'):
         """
         Initialize a batch generator.
 
@@ -57,7 +57,7 @@ class CryoBatchGenerator(Sequence):
         self.image_size = image_size
         self.shuffle = shuffle
         self.save_labels = save_labels
-        self.gauss_label = gauss_label
+        self.label_type = label_type
         self.n = len(X)
 
     def on_epoch_end(self):
@@ -130,7 +130,7 @@ class CryoBatchGenerator(Sequence):
         #Load greyscale to remove the 3 channels
         img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
 
-        gauss_img = preprocess.GaussianHighlight(img[:,:], points, 32, self.gauss_label)
+        gauss_img = preprocess.GaussianHighlight(img[:,:], points, 32, self.label_type)
 
         img = img[30:-30,30:-30]
         gauss_img = gauss_img[30:-30,30:-30]
@@ -177,14 +177,14 @@ class CryoEmNet:
     This is our cryo-em segmentation class
     """
     
-    def __init__(self, batch_size, image_size=(224,224,1), model=None, gauss_label=False):
+    def __init__(self, batch_size, image_size=(224,224,1), model=None, label_type='gauss'):
         """
         :param batch_size: Batch size for training / prediction
         :param input_size: Input image size
         """
         self.batch_size = batch_size
         self.image_size = image_size
-        self.gauss_label = gauss_label
+        self.label_type = label_type
 
         if model is None:
             # self.model = self.build_unet()
@@ -587,7 +587,6 @@ class CryoEmNet:
         :param save_model: Whether to save the model
         """
         data_path = [x for x in Path(str(os.getcwd()) + '/data/raw_data/').iterdir()]
-        data_path = data_path[:100]
 
         # Generator with the training data
         train_generator = CryoBatchGenerator(
@@ -596,7 +595,7 @@ class CryoEmNet:
             image_size=self.image_size,
             shuffle=True,
             save_labels=True,
-            gauss_label=self.gauss_label
+            label_type=self.label_type
         )
 
         # Generator with the validation data
@@ -606,7 +605,7 @@ class CryoEmNet:
             image_size=self.image_size,
             shuffle=True,
             save_labels=True,
-            gauss_label=self.gauss_label
+            label_type=self.label_type
         )
 
         # Define callbacks
@@ -727,14 +726,14 @@ class CryoEmNet:
         )
 
         # Functionality to delete the label data from the label_data folder
-        # folder = Path(os.getcwd()) / 'data' / 'label_data'
-        # for filename in folder.iterdir():
-        #     file_path = folder / Path(filename)
-        #     try:
-        #         if file_path.exists():
-        #             os.remove(str(file_path))
-        #     except Exception as e:
-        #         print('Failed to delete %s. Reason: %s' % (file_path, e))
+        folder = Path(os.getcwd()) / 'data' / 'label_data'
+        for filename in folder.iterdir():
+            file_path = folder / Path(filename)
+            try:
+                if file_path.exists():
+                    os.remove(str(file_path))
+            except Exception as e:
+                print('Failed to delete %s. Reason: %s' % (file_path, e))
 
     def predict(self, img):
         """
