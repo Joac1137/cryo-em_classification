@@ -16,6 +16,7 @@ from keras.layers import (
     LeakyReLU,
     GlobalAveragePooling2D,
     Flatten,
+    Conv2DTranspose,
     Add,
     concatenate, 
     Input
@@ -155,7 +156,6 @@ class CryoBatchGenerator(Sequence):
                 cropped_images.append(image)
                 cropped_label_images.append(gauss_image)
 
-
         if self.save_labels:
             filename = Path(str(os.getcwd()) + '/data/label_data/' + path.stem + '-points.jpg')
             if not filename.exists():
@@ -195,7 +195,8 @@ class CryoEmNet:
             # Prob good model (Need more training)
             # self.model = self.small_unet()
             
-            self.model = self.build_large_unet()
+            # self.model = self.build_large_unet()
+            self.build_large_residual_unet()
         else:
             self.model = model
 
@@ -216,7 +217,7 @@ class CryoEmNet:
         x = LeakyReLU(alpha=0.1)(x)
         return x
 
-    def __residual_module_type1(x, filters=64):
+    def __residual_module_type1(self, x, filters=64):
         """
         Creates a residual module of type 1
         
@@ -226,8 +227,10 @@ class CryoEmNet:
         :return: Return output from the residual module type 1
         """
         conv1 = Conv2D(filters, (3,3), padding='same', activation='relu', kernel_initializer='he_normal')(x)
-        conv2 = Conv2D(filters, (3,3), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
+        #conv1 = self.__convolution_layer(x, filters=filters, padding='same', kernel_initializer='he_normal')
         
+        conv2 = Conv2D(filters, (3,3), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
+        #conv2 = self.__convolution_layer(conv1, filters=filters, padding='same', kernel_initializer='he_normal')
         # Add filters, assumes conv2 and x have the same shape
         y = Add()([conv2, x])
 
@@ -235,7 +238,7 @@ class CryoEmNet:
         y = LeakyReLU(alpha=0.1)(y)
         return y
 
-    def __residual_module_type2(x, filters=64):
+    def __residual_module_type2(self, x, filters=64):
         """
         Creates a residual module of type 2
         
@@ -252,8 +255,8 @@ class CryoEmNet:
         x_reshape = Conv2D(2*filters, (1,1), strides=2,activation='linear')(x)
         # add filters, assumes conv2 and x have the same shape
         y = Add()([conv2, x_reshape])
-        # Activation function
 
+        # Activation function
         y = LeakyReLU(alpha=0.1)(y)
         return y
 
@@ -329,8 +332,95 @@ class CryoEmNet:
         
         Overwrites classs model with Large unet residual segmentation model
         """
-        print("Large residual Unet")
-        pass 
+        inputs = Input(shape=self.image_size)
+
+        # Encoder
+        # Layer 1
+        convolution_1 = self.__residual_module_type1(inputs,filters=8)
+        pooling_1 = self.__residual_module_type2(convolution_1, filters=8)
+
+        # Layer 2
+        convolution_2 = self.__residual_module_type1(pooling_1,filters=16)
+        pooling_2 = self.__residual_module_type2(convolution_2, filters=16)
+
+        # Layer 3
+        convolution_3 = self.__residual_module_type1(pooling_2,filters=32)
+
+        # Layer 4
+        convolution_4 = self.__residual_module_type1(convolution_3,filters=32)
+
+        # Layer 5
+        convolution_5 = self.__residual_module_type1(convolution_4,filters=32)
+        pooling_3 = self.__residual_module_type2(convolution_5, filters=32)
+
+        # Layer 6
+        convolution_6 = self.__residual_module_type1(pooling_3,filters=64)
+
+        # Layer 7
+        convolution_7 = self.__residual_module_type1(convolution_6,filters=64)
+
+        # Layer 8
+        convolution_8 = self.__residual_module_type1(convolution_7, filters=64)
+        pooling_4 = self.__residual_module_type2(convolution_8, filters=64)
+
+        # Layer 9
+        convolution_9 = self.__residual_module_type1(pooling_4, filters=128)
+
+        # # Layer 10
+        # convolution_10 = self.__residual_module_type1(convolution_9, filters=128)
+        
+        # # Layer 11
+        # convolution_11 = self.__residual_module_type1(convolution_10, filters=128)
+
+        # # Layer 12
+        # convolution_12 = self.__residual_module_type1(convolution_11, filters=128)
+        
+        # # Layer 13
+        # convolution_13 = self.__residual_module_type1(convolution_12, filters=128)
+
+        # # Layer 14
+        # convolution_14 = self.__residual_module_type1(convolution_13, filters=128)
+
+        # # Layer 15
+        # convolution_15 = self.__residual_module_type1(convolution_14, filters=128)
+
+        # Decoder
+        # Layer 16
+        convolution_16 = self.__residual_module_type1(convolution_9, filters=128)
+        upsampling_1 = Conv2DTranspose(filters=64, kernel_size=1, strides=2, padding = 'same', kernel_initializer='he_normal')(convolution_16)
+        merge_1 = concatenate([convolution_7,upsampling_1], axis = 3) 
+
+        # Layer 17
+        convolution_filter_resize_1 = self.__convolution_layer(merge_1, filters=64)
+        convolution_17 = self.__residual_module_type1(convolution_filter_resize_1, filters=64)
+
+        # Layer 18
+        convolution_18 = self.__residual_module_type1(convolution_17, filters=64)
+
+        # Layer 19
+        convolution_19 = self.__residual_module_type1(convolution_18, filters=64)
+        upsampling_2 = Conv2DTranspose(32, (1,1), strides=(2,2))(convolution_19)
+        merge_2 = concatenate([convolution_4,upsampling_2], axis = 3) 
+
+        # Layer 20
+        convolution_filter_resize_2 = self.__convolution_layer(merge_2, filters=32)
+        convolution_20 = self.__residual_module_type1(convolution_filter_resize_2, filters=32)
+        upsampling_3 = Conv2DTranspose(16, (1,1), strides=(2,2))(convolution_20)
+        merge_3 = concatenate([convolution_2,upsampling_3], axis = 3) 
+
+        # Layer 21
+        convolution_filter_resize_3 = self.__convolution_layer(merge_3, filters=16)
+        convolution_21 = self.__residual_module_type1(convolution_filter_resize_3, filters=16)
+        upsampling_4 = Conv2DTranspose(16, (1,1), strides=(2,2))(convolution_21)
+        merge_4 = concatenate([convolution_1,upsampling_4], axis = 3)
+
+        outputs = Conv2D(1, 1, activation = 'sigmoid')(merge_4)
+        
+        # Specify model
+        large_residual_unet = Model(inputs=inputs, outputs=outputs)
+        large_residual_unet.summary()
+
+        self.model = large_residual_unet
     
     def build_large_unet(self):
         """
