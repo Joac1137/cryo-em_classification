@@ -13,3 +13,31 @@ _Note_: Some package might not install because of _Windows Long Paths_. Solved [
 - Select virtual environment for ipynb kernel
 
 - Freeze requirements - `pip freeze > requirements.txt`
+
+
+# Small Assignemnet - Brief project status
+- Have you acquired and prepared your dataset? <br>
+    We currently have 3256 cryo em data images. Each individual image is currently 682x960 and we therefore further divide each image into 224x224, such that the model doesn't have to large of an input. We are further working with the data because currently we have no labels on the edge of each image. Thereby, we might crop each of the 3256 images in order to increase the performance. <br>
+    We are also considering using different types of labels for the images. Initially we just want to completely color the points, but we might experiment using a gaussian distribution on the points instead.
+
+- Have you set up an appropriate neural network to solve your task? <br>
+    Currently we are working with a number of different models in order to compare their results. First, we have build a base segmentation model, which doesn't have Unet connections. Furthermore, we have a small Unet model and a larger one. 
+    We are also considering using a pretrained encoder in order to compare the performance. This was also our motivation to use images of size 224x224 because this was demanded from the pretrained model. 
+
+- Have you trained and tested your first network? <br>
+    We have tried to train the different models, but haven't setup the experiments in a systemized manner yet. The performance increases when training with the base_model, small_unet and large_unet respectively. We have ensured accuracy of up to 92% (where we currently are only training on 100/3256 images). <br>
+    The performance is drastically reduced when using the gaussian distribution on the points instead. We are working on how we might fix this. 
+
+- What are the next steps? <br>
+    The next steps is definitely to setup the experiments in a more systematic manner. We then further aim to train all the different models on the entires dataset on a server that we have available. Thereafter, we might just analyze, finetune and rerun the experiments and then begin the report. 
+    We have also considered using more residual connections and further add 1x1 convolutions. 
+
+- Any uncertainties or issues you need help with? <br>
+    When designing the large_unet it is very difficult to determine the specific number of layers that we should include. Is there a rule of thumb or do we just have to try and observe the results?
+
+If you are interested in observing the results, the code is available at [Github](https://github.com/Joac1137/cryo-em_segmentation). We have different logs that can be viewed using tensorboard <br>
+<code> 
+    %load_ext tensorboard <br>
+    %tensorboard --logdir logs/cinderella_31/train 
+</code> <br>
+Image of differnet preliminary experiments are located in the `Experiments` folder. 

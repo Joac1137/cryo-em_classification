@@ -8,6 +8,7 @@
 - Split images
 
 # Model
+- Learning Rate
 - Filters (Perhaps preprocessing)
     - Denoice
     - Edge detection
@@ -23,3 +24,5 @@
     - What to do instead of max pooling?
         - Perform convolution with stride = 2.
         - Has the same effect of down-sampling by a factor of two (like max pooling normally does), but information is not thrown away in the same way as with max pooling.
+- Dice loss / Intersection-over-Union
+- See for instance slides from lecture 6 about hyperparameter tuning.
