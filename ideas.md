@@ -30,7 +30,8 @@
 - Maybe apply 1x1 convolution in order to do dimension reduction
 - Apply skip connection in order to fix vanishing gradiant problem
 - Use add instead of concatenate
-- Might change accuracy to val_loss in callbacks
+- Might change accuracy to val_loss in callbacks - might be a very good idea
+- Use transpose convolution for up-sampling
 
 # Experiments
 - Large unet model

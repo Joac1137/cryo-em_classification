@@ -20,6 +20,7 @@ from keras.layers import (
     concatenate, 
     Input
 )
+from keras.metrics import MeanIoU
 from keras.models import Model
 from keras.optimizers import Adam
 from matplotlib import pyplot as plt
@@ -30,6 +31,7 @@ from keras.callbacks import (
     TensorBoard,
     LearningRateScheduler
 )
+from tensorflow_addons.losses import GIoULoss, giou_loss
 
 
 class CryoBatchGenerator(Sequence):
@@ -259,7 +261,7 @@ class CryoEmNet:
         """
         Creates a basic model that intentionally don't have skip connections
 
-        :return: Basic segmentation model 
+        Overwrites classs model with Basic segmentation model 
         """
         inputs = Input(shape=self.image_size)
 
@@ -286,13 +288,13 @@ class CryoEmNet:
         basic_model = Model(inputs=inputs, outputs=outputs)
         basic_model.summary()
 
-        return basic_model
+        self.model = basic_model
     
     def small_unet(self):
         """
         Creates a small unet model that indeed does have skip connections
 
-        :return: Small unet model
+        Overwrites classs model with Small unet model
         """
         inputs = Input(shape=self.image_size)
 
@@ -319,21 +321,22 @@ class CryoEmNet:
         small_unet = Model(inputs=inputs, outputs=outputs)
         small_unet.summary()
 
-        return small_unet
+        self.model = small_unet
 
     def build_large_residual_unet(self):
         """
         Creates a large unet segmentation model that applies both the residual type 1 and 2 modules. Further the model should also include skip connections
         
-        :return: Large unet residual segmentation model
+        Overwrites classs model with Large unet residual segmentation model
         """
+        print("Large residual Unet")
         pass 
     
     def build_large_unet(self):
         """
         Creates a large unet segmentation model. We have extended the amount of layers, but still have only a few skip connections. 
         
-        :return: Large unet segmentation model
+        Overwrites classs model with Large unet segmentation model
         """
         inputs = Input(shape=self.image_size)
 
@@ -420,13 +423,13 @@ class CryoEmNet:
         large_unet = Model(inputs=inputs, outputs=outputs)
         large_unet.summary()
 
-        return large_unet
+        self.model = large_unet
     
     def build_unet(self):
         """
         Creates a unet model that has some intermediate convolutions, such that it becomes a bit larger
 
-        :return: Unet segmentation model
+        Overwrites classs model with Unet segmentation model
         """
         inputs = Input(shape=self.image_size)
 
@@ -469,8 +472,8 @@ class CryoEmNet:
         # Specify model
         custom_unet = Model(inputs=inputs, outputs=outputs)
         custom_unet.summary()
-
-        return custom_unet
+        
+        self.model = custom_unet
 
     def train(
         self, 
@@ -601,10 +604,29 @@ class CryoEmNet:
             name="Adam",
         )
 
+        def dice_loss(y_true,y_pred,smooth=1):
+            import keras.backend as K
+            '''
+            dice coefficient =2*sum(|y_true*y_pred|)/(sum(y_true^2)+sum(y_pred^2))
+            
+            Args:
+            ->ground truth label
+            ->predicted label
+            -smooth:default is 1
+
+            https://github.com/tensorflow/addons/pull/2558/commits/fa02a90d838b6e521c8f5b1ae2fd6c0a4bd2b794
+            '''
+            intersection=K.sum(K.abs(y_true*y_pred),axis=-1)
+            return 1-(2. * intersection + smooth) / (K.sum(K.square(y_true),-1) + K.sum(K.square(y_pred),-1) - intersection + smooth)
+
         self.model.compile(
             optimizer=optimizer, 
-            loss='mse', 
-            metrics=['accuracy'],
+            # loss='mse'
+            # loss=giou_loss,
+            # loss=GIoULoss(),
+            loss=dice_loss,
+            # metrics=['accuracy'],
+            metrics=[MeanIoU(num_classes=2), 'accuracy']
         )
 
         self.model.fit(
