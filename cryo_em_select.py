@@ -226,11 +226,11 @@ class CryoEmNet:
 
         :return: Return output from the residual module type 1
         """
-        conv1 = Conv2D(filters, (3,3), padding='same', activation='relu', kernel_initializer='he_normal')(x)
-        #conv1 = self.__convolution_layer(x, filters=filters, padding='same', kernel_initializer='he_normal')
+        #conv1 = Conv2D(filters, (3,3), padding='same', activation='relu', kernel_initializer='he_normal')(x)
+        conv1 = self.__convolution_layer(x, filters=filters, padding='same', kernel_initializer='he_normal')
         
-        conv2 = Conv2D(filters, (3,3), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
-        #conv2 = self.__convolution_layer(conv1, filters=filters, padding='same', kernel_initializer='he_normal')
+        #conv2 = Conv2D(filters, (3,3), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
+        conv2 = self.__convolution_layer(conv1, filters=filters, padding='same', kernel_initializer='he_normal')
         # Add filters, assumes conv2 and x have the same shape
         y = Add()([conv2, x])
 
