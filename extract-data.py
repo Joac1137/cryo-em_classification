@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-p = Path(os.getcwd()) / 'output'
+p = Path(os.getcwd()) / 'data' / 'output'
 
 for file in p.iterdir():
     if file.suffix == '.csv':
