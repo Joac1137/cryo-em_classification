@@ -7,18 +7,18 @@ import cv2
 import preprocess
 import numpy as np
 from keras.layers import (
-    Conv2D, 
-    Activation, 
-    BatchNormalization, 
-    UpSampling2D, 
-    Dense, 
+    Conv2D,
+    Activation,
+    BatchNormalization,
+    UpSampling2D,
+    Dense,
     MaxPooling2D,
     LeakyReLU,
     GlobalAveragePooling2D,
     Flatten,
     Conv2DTranspose,
     Add,
-    concatenate, 
+    concatenate,
     Input
 )
 from keras.metrics import MeanIoU
@@ -26,13 +26,17 @@ from keras.models import Model
 from keras.optimizers import Adam
 from matplotlib import pyplot as plt
 from keras.callbacks import (
-    ModelCheckpoint, 
-    EarlyStopping, 
+    ModelCheckpoint,
+    EarlyStopping,
     ReduceLROnPlateau,
     TensorBoard,
     LearningRateScheduler
 )
 from tensorflow_addons.losses import GIoULoss, giou_loss
+
+import logging
+logging.basicConfig(filename='cryo-em-select.log',
+                    encoding='utf-8', level=logging.DEBUG)
 
 
 class CryoBatchGenerator(Sequence):
@@ -41,7 +45,7 @@ class CryoBatchGenerator(Sequence):
     and create the labels from the .csv files. 
     """
 
-    def __init__(self, X, batch_size, image_size=(224,224,1), shuffle=False, save_labels=False, label_type='gauss'):
+    def __init__(self, X, batch_size, image_size=(224, 224, 1), shuffle=False, save_labels=False, label_type='gauss'):
         """
         Initialize a batch generator.
 
@@ -51,7 +55,7 @@ class CryoBatchGenerator(Sequence):
         :param shuffle: Whether to shuffle the images
         :param save_labels: Whether to save the labels for the images
         """
-        
+
         self.X = X
         self.batch_size = batch_size
         self.image_size = image_size
@@ -60,12 +64,15 @@ class CryoBatchGenerator(Sequence):
         self.label_type = label_type
         self.n = len(X)
 
+        logging.debug("Created CryoBatchGenerator")
+
     def on_epoch_end(self):
         """
         This method shuffle the training data at the end of a epoch.
 
         :return: None
         """
+        logging.debug("epoch ended shuffle training data")
         if self.shuffle:
             np.random.shuffle(self.X)
 
@@ -78,7 +85,7 @@ class CryoBatchGenerator(Sequence):
                     First output is the training data
                     Second output is the label for the images
         """
-
+        logging.debug("generating one batch of data for batch index: {index}")
         batch = self.X[index * self.batch_size:(index + 1) * self.batch_size]
         X, Y = self.__get_data(batch)
 
@@ -93,7 +100,7 @@ class CryoBatchGenerator(Sequence):
                     First output is the raw images
                     Second output is the label for the images
         """
-
+        logging.debug("creating batch")
         # __get_input return tuples, thus we convert them to list of tuples and further map to a list
         X_batch, Y_batch = zip(*[self.__get_input(x) for x in batch])
 
@@ -102,7 +109,7 @@ class CryoBatchGenerator(Sequence):
         X_batch = np.concatenate(X_batch, axis=0)
 
         Y_batch = np.asarray(Y_batch)
-        Y_batch = np.concatenate(Y_batch,axis=0)
+        Y_batch = np.concatenate(Y_batch, axis=0)
 
         return X_batch, Y_batch
 
@@ -115,41 +122,45 @@ class CryoBatchGenerator(Sequence):
                     First output is the original image scaled
                     Second output is the labels for the images
         """
+        logging.debug("add labels for image")
         image_height = 622
         image_width = 900
 
-        label_path = Path(str(os.getcwd()) + '/data/label_annotation/' + path.stem + '-points' + '.csv')
+        label_path = Path(
+            str(os.getcwd()) + '/data/label_annotation/' + path.stem + '-points' + '.csv')
         if not label_path.exists():
-            return [],[]
+            return [], []
         label_df = pd.read_csv(label_path, header=None)
         label_df = label_df.round(0).astype(int)
 
         # Coordinate system turns in a weird way.
         points = [(rows[1], rows[0]) for _, rows in label_df.iterrows()]
-    
-        #Load greyscale to remove the 3 channels
+
+        # Load greyscale to remove the 3 channels
         img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
 
-        gauss_img = preprocess.GaussianHighlight(img[:,:], points, 32, self.label_type)
+        gauss_img = preprocess.GaussianHighlight(
+            img[:, :], points, 32, self.label_type)
 
-        img = img[30:-30,30:-30]
-        gauss_img = gauss_img[30:-30,30:-30]
+        img = img[30:-30, 30:-30]
+        gauss_img = gauss_img[30:-30, 30:-30]
         # Apply edge detection
         #img = cv2.Sobel(img, cv2.CV_8U, 1, 0, ksize=3)
 
         cropped_images = []
         cropped_label_images = []
         # 682, 960
-        for i in range(self.image_size[0],image_height,self.image_size[0]):
-            for j in range(self.image_size[1],image_width,self.image_size[1]):
-                image = img[i-self.image_size[0]:i, j-self.image_size[1]:j]                
+        for i in range(self.image_size[0], image_height, self.image_size[0]):
+            for j in range(self.image_size[1], image_width, self.image_size[1]):
+                image = img[i-self.image_size[0]:i, j-self.image_size[1]:j]
                 image = image.astype(float)
                 image /= 255.
                 # Zero center image
                 image = (image - image.mean()) / image.std()
                 #image = (2 * image) - 1
 
-                gauss_image = gauss_img[i-self.image_size[0]:i, j-self.image_size[1]:j]
+                gauss_image = gauss_img[i-self.image_size[0]
+                    :i, j-self.image_size[1]:j]
                 gauss_image = gauss_image.astype(float)
                 gauss_image /= 255.
 
@@ -157,16 +168,18 @@ class CryoBatchGenerator(Sequence):
                 cropped_label_images.append(gauss_image)
 
         if self.save_labels:
-            filename = Path(str(os.getcwd()) + '/data/label_data/' + path.stem + '-points.jpg')
+            filename = Path(str(os.getcwd()) +
+                            '/data/label_data/' + path.stem + '-points.jpg')
             if not filename.exists():
-                cv2.imwrite(str(filename), gauss_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
+                cv2.imwrite(str(filename), gauss_img, [
+                            cv2.IMWRITE_JPEG_QUALITY, 100])
 
         return cropped_images, cropped_label_images
-    
+
     def __len__(self):
         """
         Total number of batches.
-        
+
         :return: The length of the 
         """
         return self.n // self.batch_size
@@ -176,12 +189,13 @@ class CryoEmNet:
     """
     This is our cryo-em segmentation class
     """
-    
-    def __init__(self, batch_size, image_size=(224,224,1), model=None, label_type='gauss'):
+
+    def __init__(self, batch_size, image_size=(224, 224, 1), model=None, label_type='gauss'):
         """
         :param batch_size: Batch size for training / prediction
         :param input_size: Input image size
         """
+        logging.debug("Creating CryoEmNet")
         self.batch_size = batch_size
         self.image_size = image_size
         self.label_type = label_type
@@ -194,11 +208,13 @@ class CryoEmNet:
 
             # Prob good model (Need more training)
             # self.model = self.small_unet()
-            
+
             # self.model = self.build_large_unet()
             self.build_large_residual_unet()
         else:
             self.model = model
+
+        logging.debug("Created CryoEmNet")
 
     def __convolution_layer(self, x, filters, kernel_size=3, padding='same', kernel_initializer='he_normal'):
         """
@@ -212,7 +228,8 @@ class CryoEmNet:
 
         :return: Returns a tensor from the convolution layers
         """
-        x = Conv2D(filters, kernel_size, padding=padding, kernel_initializer=kernel_initializer)(x)
+        x = Conv2D(filters, kernel_size, padding=padding,
+                   kernel_initializer=kernel_initializer)(x)
         x = BatchNormalization()(x)
         x = LeakyReLU(alpha=0.1)(x)
         return x
@@ -220,17 +237,19 @@ class CryoEmNet:
     def __residual_module_type1(self, x, filters=64):
         """
         Creates a residual module of type 1
-        
+
         :param x: Input tensor
         :param filters: Integer, the dimensionality of the output space 
 
         :return: Return output from the residual module type 1
         """
         #conv1 = Conv2D(filters, (3,3), padding='same', activation='relu', kernel_initializer='he_normal')(x)
-        conv1 = self.__convolution_layer(x, filters=filters, padding='same', kernel_initializer='he_normal')
-        
+        conv1 = self.__convolution_layer(
+            x, filters=filters, padding='same', kernel_initializer='he_normal')
+
         #conv2 = Conv2D(filters, (3,3), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
-        conv2 = self.__convolution_layer(conv1, filters=filters, padding='same', kernel_initializer='he_normal')
+        conv2 = self.__convolution_layer(
+            conv1, filters=filters, padding='same', kernel_initializer='he_normal')
         # Add filters, assumes conv2 and x have the same shape
         y = Add()([conv2, x])
 
@@ -241,18 +260,21 @@ class CryoEmNet:
     def __residual_module_type2(self, x, filters=64):
         """
         Creates a residual module of type 2
-        
+
         :param x: Input tensor
         :param filters: Integer, the dimensionality of the output space 
 
         :return: Return output from the residual module type 2
         """
         # conv1 (reduces height/width by a factor of two and doubles the number of channels)
-        conv1 = Conv2D(2*filters, (3,3), strides=2, padding='same', activation='relu', kernel_initializer='he_normal')(x)
+        conv1 = Conv2D(2*filters, (3, 3), strides=2, padding='same',
+                       activation='relu', kernel_initializer='he_normal')(x)
         # conv2 (same shape as conv1)
-        conv2 = Conv2D(2*filters, (3,3), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
+        conv2 = Conv2D(2*filters, (3, 3), padding='same',
+                       activation='linear', kernel_initializer='he_normal')(conv1)
         # reshape x (same shape as conv2)
-        x_reshape = Conv2D(2*filters, (1,1), strides=2,activation='linear')(x)
+        x_reshape = Conv2D(2*filters, (1, 1), strides=2,
+                           activation='linear')(x)
         # add filters, assumes conv2 and x have the same shape
         y = Add()([conv2, x_reshape])
 
@@ -266,98 +288,118 @@ class CryoEmNet:
 
         Overwrites classs model with Basic segmentation model 
         """
+        logging.debug("Building basic model")
+
+        logging.debug("Setting inputs")
         inputs = Input(shape=self.image_size)
 
         # Encoder
-        convolution_1 = self.__convolution_layer(inputs,filters=8)
+        logging.debug("Setting up encoder")
+        convolution_1 = self.__convolution_layer(inputs, filters=8)
         pooling_1 = MaxPooling2D(pool_size=(2, 2))(convolution_1)
-        convolution_2 = self.__convolution_layer(pooling_1,filters=16)
+        convolution_2 = self.__convolution_layer(pooling_1, filters=16)
         pooling_2 = MaxPooling2D(pool_size=(2, 2))(convolution_2)
-        convolution_3 = self.__convolution_layer(pooling_2,filters=32)
+        convolution_3 = self.__convolution_layer(pooling_2, filters=32)
         pooling_3 = MaxPooling2D(pool_size=(2, 2))(convolution_3)
-        convolution_4 = self.__convolution_layer(pooling_3,filters=64)
+        convolution_4 = self.__convolution_layer(pooling_3, filters=64)
 
         # Decoder
-        convolution_5 = self.__convolution_layer(convolution_4,filters=32)
-        upsampling_1 = UpSampling2D(size = (2,2))(convolution_5)
-        convolution_6 = self.__convolution_layer(upsampling_1,filters=16)
-        upsampling_2 = UpSampling2D(size = (2,2))(convolution_6)
-        convolution_7 = self.__convolution_layer(upsampling_2,filters=8)
-        upsampling_3 = UpSampling2D(size = (2,2))(convolution_7)
+        logging.debug("Setting up decoder")
+        convolution_5 = self.__convolution_layer(convolution_4, filters=32)
+        upsampling_1 = UpSampling2D(size=(2, 2))(convolution_5)
+        convolution_6 = self.__convolution_layer(upsampling_1, filters=16)
+        upsampling_2 = UpSampling2D(size=(2, 2))(convolution_6)
+        convolution_7 = self.__convolution_layer(upsampling_2, filters=8)
+        upsampling_3 = UpSampling2D(size=(2, 2))(convolution_7)
 
-        outputs = Conv2D(1, 1, activation = 'sigmoid')(upsampling_3)
+        logging.debug("Setting outputs")
+        outputs = Conv2D(1, 1, activation='sigmoid')(upsampling_3)
 
         # Specify model
+        logging.debug("Init model with inputs and outputs")
         basic_model = Model(inputs=inputs, outputs=outputs)
         basic_model.summary()
 
         self.model = basic_model
-    
+
+        logging.debug("Created basic model")
+
     def small_unet(self):
         """
         Creates a small unet model that indeed does have skip connections
 
         Overwrites classs model with Small unet model
         """
+        logging.debug("Building small unet")
+        logging.debug("Setting inputs")
         inputs = Input(shape=self.image_size)
 
         # Encoder
-        convolution_1 = self.__convolution_layer(inputs,filters=8)
+        logging.debug("Setting up encoder")
+        convolution_1 = self.__convolution_layer(inputs, filters=8)
         pooling_1 = MaxPooling2D(pool_size=(2, 2))(convolution_1)
-        convolution_2 = self.__convolution_layer(pooling_1,filters=16)
+        convolution_2 = self.__convolution_layer(pooling_1, filters=16)
         pooling_2 = MaxPooling2D(pool_size=(2, 2))(convolution_2)
-        convolution_3 = self.__convolution_layer(pooling_2,filters=32)
+        convolution_3 = self.__convolution_layer(pooling_2, filters=32)
         pooling_3 = MaxPooling2D(pool_size=(2, 2))(convolution_3)
-        convolution_4 = self.__convolution_layer(pooling_3,filters=64)
+        convolution_4 = self.__convolution_layer(pooling_3, filters=64)
 
         # Decoder
-        upsampling_1 = UpSampling2D(size = (2,2))(convolution_4)
-        merge_1 = concatenate([convolution_3,upsampling_1], axis = 3)
-        upsampling_2 = UpSampling2D(size = (2,2))(merge_1)
-        merge_2 = concatenate([convolution_2,upsampling_2], axis = 3)
-        upsampling_3 = UpSampling2D(size = (2,2))(merge_2)
-        merge_3 = concatenate([convolution_1,upsampling_3], axis = 3)
+        logging.debug("Setting up decoder")
+        upsampling_1 = UpSampling2D(size=(2, 2))(convolution_4)
+        merge_1 = concatenate([convolution_3, upsampling_1], axis=3)
+        upsampling_2 = UpSampling2D(size=(2, 2))(merge_1)
+        merge_2 = concatenate([convolution_2, upsampling_2], axis=3)
+        upsampling_3 = UpSampling2D(size=(2, 2))(merge_2)
+        merge_3 = concatenate([convolution_1, upsampling_3], axis=3)
 
-        outputs = Conv2D(1, 1, activation = 'sigmoid')(merge_3)
+        logging.debug("Setting outputs")
+        outputs = Conv2D(1, 1, activation='sigmoid')(merge_3)
 
         # Specify model
+        logging.debug("Init model with inputs and outputs")
         small_unet = Model(inputs=inputs, outputs=outputs)
         small_unet.summary()
 
         self.model = small_unet
 
+        logging.debug("Created small unet")
+
     def build_large_residual_unet(self):
         """
         Creates a large unet segmentation model that applies both the residual type 1 and 2 modules. Further the model should also include skip connections
-        
+
         Overwrites classs model with Large unet residual segmentation model
         """
+        logging.debug("Building large residual unet")
+        logging.debug("Setting inputs")
         inputs = Input(shape=self.image_size)
 
         # Encoder
+        logging.debug("Setting up encoder")
         # Layer 1
-        convolution_1 = self.__residual_module_type1(inputs,filters=8)
+        convolution_1 = self.__residual_module_type1(inputs, filters=8)
         pooling_1 = self.__residual_module_type2(convolution_1, filters=8)
 
         # Layer 2
-        convolution_2 = self.__residual_module_type1(pooling_1,filters=16)
+        convolution_2 = self.__residual_module_type1(pooling_1, filters=16)
         pooling_2 = self.__residual_module_type2(convolution_2, filters=16)
 
         # Layer 3
-        convolution_3 = self.__residual_module_type1(pooling_2,filters=32)
+        convolution_3 = self.__residual_module_type1(pooling_2, filters=32)
 
         # Layer 4
-        convolution_4 = self.__residual_module_type1(convolution_3,filters=32)
+        convolution_4 = self.__residual_module_type1(convolution_3, filters=32)
 
         # Layer 5
-        convolution_5 = self.__residual_module_type1(convolution_4,filters=32)
+        convolution_5 = self.__residual_module_type1(convolution_4, filters=32)
         pooling_3 = self.__residual_module_type2(convolution_5, filters=32)
 
         # Layer 6
-        convolution_6 = self.__residual_module_type1(pooling_3,filters=64)
+        convolution_6 = self.__residual_module_type1(pooling_3, filters=64)
 
         # Layer 7
-        convolution_7 = self.__residual_module_type1(convolution_6,filters=64)
+        convolution_7 = self.__residual_module_type1(convolution_6, filters=64)
 
         # Layer 8
         convolution_8 = self.__residual_module_type1(convolution_7, filters=64)
@@ -368,13 +410,13 @@ class CryoEmNet:
 
         # # Layer 10
         # convolution_10 = self.__residual_module_type1(convolution_9, filters=128)
-        
+
         # # Layer 11
         # convolution_11 = self.__residual_module_type1(convolution_10, filters=128)
 
         # # Layer 12
         # convolution_12 = self.__residual_module_type1(convolution_11, filters=128)
-        
+
         # # Layer 13
         # convolution_13 = self.__residual_module_type1(convolution_12, filters=128)
 
@@ -385,92 +427,113 @@ class CryoEmNet:
         # convolution_15 = self.__residual_module_type1(convolution_14, filters=128)
 
         # Decoder
+        logging.debug("Setting up decoder")
         # Layer 16
-        convolution_16 = self.__residual_module_type1(convolution_9, filters=128)
-        upsampling_1 = Conv2DTranspose(filters=64, kernel_size=1, strides=2, padding = 'same', kernel_initializer='he_normal')(convolution_16)
-        merge_1 = concatenate([convolution_7,upsampling_1], axis = 3) 
+        convolution_16 = self.__residual_module_type1(
+            convolution_9, filters=128)
+        upsampling_1 = Conv2DTranspose(filters=64, kernel_size=1, strides=2,
+                                       padding='same', kernel_initializer='he_normal')(convolution_16)
+        merge_1 = concatenate([convolution_7, upsampling_1], axis=3)
 
         # Layer 17
-        convolution_filter_resize_1 = self.__convolution_layer(merge_1, filters=64)
-        convolution_17 = self.__residual_module_type1(convolution_filter_resize_1, filters=64)
+        convolution_filter_resize_1 = self.__convolution_layer(
+            merge_1, filters=64)
+        convolution_17 = self.__residual_module_type1(
+            convolution_filter_resize_1, filters=64)
 
         # Layer 18
-        convolution_18 = self.__residual_module_type1(convolution_17, filters=64)
+        convolution_18 = self.__residual_module_type1(
+            convolution_17, filters=64)
 
         # Layer 19
-        convolution_19 = self.__residual_module_type1(convolution_18, filters=64)
-        upsampling_2 = Conv2DTranspose(32, (1,1), strides=(2,2))(convolution_19)
-        merge_2 = concatenate([convolution_4,upsampling_2], axis = 3) 
+        convolution_19 = self.__residual_module_type1(
+            convolution_18, filters=64)
+        upsampling_2 = Conv2DTranspose(
+            32, (1, 1), strides=(2, 2))(convolution_19)
+        merge_2 = concatenate([convolution_4, upsampling_2], axis=3)
 
         # Layer 20
-        convolution_filter_resize_2 = self.__convolution_layer(merge_2, filters=32)
-        convolution_20 = self.__residual_module_type1(convolution_filter_resize_2, filters=32)
-        upsampling_3 = Conv2DTranspose(16, (1,1), strides=(2,2))(convolution_20)
-        merge_3 = concatenate([convolution_2,upsampling_3], axis = 3) 
+        convolution_filter_resize_2 = self.__convolution_layer(
+            merge_2, filters=32)
+        convolution_20 = self.__residual_module_type1(
+            convolution_filter_resize_2, filters=32)
+        upsampling_3 = Conv2DTranspose(
+            16, (1, 1), strides=(2, 2))(convolution_20)
+        merge_3 = concatenate([convolution_2, upsampling_3], axis=3)
 
         # Layer 21
-        convolution_filter_resize_3 = self.__convolution_layer(merge_3, filters=16)
-        convolution_21 = self.__residual_module_type1(convolution_filter_resize_3, filters=16)
-        upsampling_4 = Conv2DTranspose(16, (1,1), strides=(2,2))(convolution_21)
-        merge_4 = concatenate([convolution_1,upsampling_4], axis = 3)
+        convolution_filter_resize_3 = self.__convolution_layer(
+            merge_3, filters=16)
+        convolution_21 = self.__residual_module_type1(
+            convolution_filter_resize_3, filters=16)
+        upsampling_4 = Conv2DTranspose(
+            16, (1, 1), strides=(2, 2))(convolution_21)
+        merge_4 = concatenate([convolution_1, upsampling_4], axis=3)
 
-        outputs = Conv2D(1, 1, activation = 'sigmoid')(merge_4)
-        
+        logging.debug("Setting outputs")
+        outputs = Conv2D(1, 1, activation='sigmoid')(merge_4)
+
         # Specify model
+        logging.debug("Init model with inputs and outputs")
         large_residual_unet = Model(inputs=inputs, outputs=outputs)
         large_residual_unet.summary()
 
         self.model = large_residual_unet
-    
+
+        logging.debug("Created large residual unet")
+
     def build_large_unet(self):
         """
         Creates a large unet segmentation model. We have extended the amount of layers, but still have only a few skip connections. 
-        
+
         Overwrites classs model with Large unet segmentation model
         """
+        logging.debug("Building large unet")
+        logging.debug("Setting inputs")
         inputs = Input(shape=self.image_size)
 
         # Encoder
+        logging.debug("Setting up encoder")
         # Layer 1
-        convolution_1 = self.__convolution_layer(inputs,filters=8)
+        convolution_1 = self.__convolution_layer(inputs, filters=8)
         pooling_1 = MaxPooling2D(pool_size=(2, 2))(convolution_1)
 
         # Layer 2
-        convolution_2 = self.__convolution_layer(pooling_1,filters=16)
+        convolution_2 = self.__convolution_layer(pooling_1, filters=16)
         pooling_2 = MaxPooling2D(pool_size=(2, 2))(convolution_2)
 
         # Layer 3
-        convolution_3 = self.__convolution_layer(pooling_2,filters=32)
+        convolution_3 = self.__convolution_layer(pooling_2, filters=32)
 
         # Layer 4
-        convolution_4 = self.__convolution_layer(convolution_3,filters=16)
+        convolution_4 = self.__convolution_layer(convolution_3, filters=16)
 
         # Layer 5
-        convolution_5 = self.__convolution_layer(convolution_4,filters=32)
-        pooling_3 = MaxPooling2D(pool_size=(2,2))(convolution_5)
+        convolution_5 = self.__convolution_layer(convolution_4, filters=32)
+        pooling_3 = MaxPooling2D(pool_size=(2, 2))(convolution_5)
 
         # Layer 6
-        convolution_6 = self.__convolution_layer(pooling_3,filters=64)
+        convolution_6 = self.__convolution_layer(pooling_3, filters=64)
 
         # Layer 7
-        convolution_7 = self.__convolution_layer(convolution_6,filters=32)
+        convolution_7 = self.__convolution_layer(convolution_6, filters=32)
 
         # Layer 8
         convolution_8 = self.__convolution_layer(convolution_7, filters=64)
-        pooling_4 = MaxPooling2D(pool_size=(2,2))(convolution_8)
+        pooling_4 = MaxPooling2D(pool_size=(2, 2))(convolution_8)
 
         # Layer 9
         convolution_9 = self.__convolution_layer(pooling_4, filters=128)
 
         # Layer 10
         convolution_10 = self.__convolution_layer(convolution_9, filters=64)
-        
+
         # Layer 11
         convolution_11 = self.__convolution_layer(convolution_10, filters=128)
 
         # Layer 12
         convolution_12 = self.__convolution_layer(convolution_11, filters=64)
-        
+
         # Layer 13
         convolution_13 = self.__convolution_layer(convolution_12, filters=128)
 
@@ -481,10 +544,11 @@ class CryoEmNet:
         convolution_15 = self.__convolution_layer(convolution_14, filters=128)
 
         # Decoder
+        logging.debug("Setting up decoder")
         # Layer 16
         convolution_16 = self.__convolution_layer(convolution_15, filters=64)
-        upsampling_1 = UpSampling2D(size = (2,2))(convolution_16)
-        merge_1 = concatenate([convolution_7,upsampling_1], axis = 3) 
+        upsampling_1 = UpSampling2D(size=(2, 2))(convolution_16)
+        merge_1 = concatenate([convolution_7, upsampling_1], axis=3)
 
         # Layer 17
         convolution_17 = self.__convolution_layer(merge_1, filters=32)
@@ -494,90 +558,102 @@ class CryoEmNet:
 
         # Layer 19
         convolution_19 = self.__convolution_layer(convolution_18, filters=32)
-        upsampling_2 = UpSampling2D(size = (2,2))(convolution_19)
-        merge_2 = concatenate([convolution_4,upsampling_2], axis = 3) 
+        upsampling_2 = UpSampling2D(size=(2, 2))(convolution_19)
+        merge_2 = concatenate([convolution_4, upsampling_2], axis=3)
 
         # Layer 20
         convolution_20 = self.__convolution_layer(merge_2, filters=16)
-        upsampling_3 = UpSampling2D(size = (2,2))(convolution_20)
-        merge_3 = concatenate([convolution_2,upsampling_3], axis = 3) 
+        upsampling_3 = UpSampling2D(size=(2, 2))(convolution_20)
+        merge_3 = concatenate([convolution_2, upsampling_3], axis=3)
 
         # Layer 21
         convolution_21 = self.__convolution_layer(merge_3, filters=16)
-        upsampling_4 = UpSampling2D(size = (2,2))(convolution_21)
-        merge_4 = concatenate([convolution_1,upsampling_4], axis = 3)
+        upsampling_4 = UpSampling2D(size=(2, 2))(convolution_21)
+        merge_4 = concatenate([convolution_1, upsampling_4], axis=3)
 
-        outputs = Conv2D(1, 1, activation = 'sigmoid')(merge_4)
-        
+        logging.debug("Setting output")
+        outputs = Conv2D(1, 1, activation='sigmoid')(merge_4)
+
         # Specify model
+        logging.debug("Init model with inputs and outputs")
         large_unet = Model(inputs=inputs, outputs=outputs)
         large_unet.summary()
 
         self.model = large_unet
-    
+
+        logging.debug("Created large unet")
+
     def build_unet(self):
         """
         Creates a unet model that has some intermediate convolutions, such that it becomes a bit larger
 
         Overwrites classs model with Unet segmentation model
         """
+        logging.debug("Building unet")
+        logging.debug("Setting inputs")
         inputs = Input(shape=self.image_size)
 
         # Encoder
-        convolution_1 = self.__convolution_layer(inputs,filters=8)
+        logging.debug("Setting up encoder")
+        convolution_1 = self.__convolution_layer(inputs, filters=8)
         pooling_1 = MaxPooling2D(pool_size=(2, 2))(convolution_1)
-        convolution_2 = self.__convolution_layer(pooling_1,filters=16)
+        convolution_2 = self.__convolution_layer(pooling_1, filters=16)
         pooling_2 = MaxPooling2D(pool_size=(2, 2))(convolution_2)
-        convolution_3 = self.__convolution_layer(pooling_2,filters=32)
+        convolution_3 = self.__convolution_layer(pooling_2, filters=32)
         pooling_3 = MaxPooling2D(pool_size=(2, 2))(convolution_3)
-        convolution_4 = self.__convolution_layer(pooling_3,filters=64)
+        convolution_4 = self.__convolution_layer(pooling_3, filters=64)
 
         # Decoder
-        convolution_5 = self.__convolution_layer(convolution_4,filters=32)
-        upsampling_1 = UpSampling2D(size = (2,2))(convolution_5)
+        logging.debug("Setting up decoder")
+        convolution_5 = self.__convolution_layer(convolution_4, filters=32)
+        upsampling_1 = UpSampling2D(size=(2, 2))(convolution_5)
 
-        convolution_5_1 = self.__convolution_layer(upsampling_1,filters=32)
-        convolution_5_2 = self.__convolution_layer(convolution_5_1,filters=32)
+        convolution_5_1 = self.__convolution_layer(upsampling_1, filters=32)
+        convolution_5_2 = self.__convolution_layer(convolution_5_1, filters=32)
 
-        merge_1 = concatenate([convolution_3,convolution_5_2], axis = 3)
+        merge_1 = concatenate([convolution_3, convolution_5_2], axis=3)
 
-        convolution_6 = self.__convolution_layer(merge_1,filters=16)
-        upsampling_2 = UpSampling2D(size = (2,2))(convolution_6)
+        convolution_6 = self.__convolution_layer(merge_1, filters=16)
+        upsampling_2 = UpSampling2D(size=(2, 2))(convolution_6)
 
-        convolution_6_1 = self.__convolution_layer(upsampling_2,filters=16)
-        convolution_6_2 = self.__convolution_layer(convolution_6_1,filters=16)
+        convolution_6_1 = self.__convolution_layer(upsampling_2, filters=16)
+        convolution_6_2 = self.__convolution_layer(convolution_6_1, filters=16)
 
-        merge_2 = concatenate([convolution_2,convolution_6_2], axis = 3)
+        merge_2 = concatenate([convolution_2, convolution_6_2], axis=3)
 
-        convolution_7 = self.__convolution_layer(merge_2,filters=8)
-        upsampling_3 = UpSampling2D(size = (2,2))(convolution_7)
+        convolution_7 = self.__convolution_layer(merge_2, filters=8)
+        upsampling_3 = UpSampling2D(size=(2, 2))(convolution_7)
 
-        convolution_7_1 = self.__convolution_layer(upsampling_3,filters=16)
-        convolution_7_2 = self.__convolution_layer(convolution_7_1,filters=16)
+        convolution_7_1 = self.__convolution_layer(upsampling_3, filters=16)
+        convolution_7_2 = self.__convolution_layer(convolution_7_1, filters=16)
 
-        merge_3 = concatenate([convolution_1,convolution_7_2], axis = 3)
+        merge_3 = concatenate([convolution_1, convolution_7_2], axis=3)
 
-        outputs = Conv2D(1, 1, activation = 'sigmoid')(merge_3)
+        logging.debug("Setting outputs")
+        outputs = Conv2D(1, 1, activation='sigmoid')(merge_3)
 
         # Specify model
+        logging.debug("Init model with inputs and outputs")
         custom_unet = Model(inputs=inputs, outputs=outputs)
         custom_unet.summary()
-        
+
         self.model = custom_unet
 
+        logging.debug("Created unet")
+
     def train(
-        self, 
-        filepath: Path=Path(str(os.getcwd())) / 'model' / 'checkpoint',
+        self,
+        filepath: Path = Path(str(os.getcwd())) / 'model' / 'checkpoint',
         nb_epoch_early=10,
         warmrestarts=True,
-        learning_rate=10 ** -2, 
+        learning_rate=10 ** -2,
         epochs=10,
         save_log=True,
         save_model=True
     ):
         """
         Function that trains the CryoEmNet model. Method also handles all callback functionality, specify the model optimizer and compilers the model.
-        
+
         :param filepath: Path to where we save the model
         :param nb_epoch_early: Number of epochs before we consider early stopping. This is also used when considering if we should reduce the learning rate on a plateau.
         :param warmrestarts:  This warm-starting approach enables us to start training from a better initial point on the loss surface and often learn better models
@@ -586,9 +662,22 @@ class CryoEmNet:
         :param save_log: Whether to save the log file
         :param save_model: Whether to save the model
         """
-        data_path = [x for x in Path(str(os.getcwd()) + '/data/raw_data/').iterdir()]
+        logging.debug("Starting train")
+        logging.debug(" - filepath: {filepath}")
+        logging.debug(" - nb_epoch_early: {nb_epoch_early}")
+        logging.debug(" - warmrestarts: {warmrestarts}")
+        logging.debug(" - learning_rate: {learning_rate}")
+        logging.debug(" - epochs: {epochs}")
+        logging.debug(" - save_log: {save_log}")
+        logging.debug(" - save_model: {save_model}")
+
+        data_path = [x for x in Path(
+            str(os.getcwd()) + '/data/raw_data/').iterdir()]
+
+        logging.debug("data_path = {data_path}")
 
         # Generator with the training data
+        logging.debug("Creating training data generator")
         train_generator = CryoBatchGenerator(
             X=data_path[:int(len(data_path) * 0.8)],
             batch_size=self.batch_size,
@@ -599,6 +688,7 @@ class CryoEmNet:
         )
 
         # Generator with the validation data
+        logging.debug("Creating validation data generator")
         validation_generator = CryoBatchGenerator(
             X=data_path[int(len(data_path) * 0.8):],
             batch_size=self.batch_size,
@@ -609,6 +699,7 @@ class CryoEmNet:
         )
 
         # Define callbacks
+        logging.debug("Defining callbacks")
         all_callbacks = []
         if save_model:
             checkpoint = ModelCheckpoint(
@@ -655,7 +746,8 @@ class CryoEmNet:
                 + 1
             )
             tensorboard = TensorBoard(
-                log_dir=os.path.expanduser("logs/") + "cinderella" + "_" + str(tb_counter),
+                log_dir=os.path.expanduser(
+                    "logs/") + "cinderella" + "_" + str(tb_counter),
                 histogram_freq=1,
                 write_graph=True,
                 write_images=True,
@@ -680,10 +772,11 @@ class CryoEmNet:
                 schedule=scheduler,
                 verbose=True
             )
-            
+
             all_callbacks.append(schedule)
 
         # Model optimizer
+        logging.debug("Creating model optimizer")
         optimizer = Adam(
             learning_rate=learning_rate,
             beta_1=0.9,
@@ -693,7 +786,7 @@ class CryoEmNet:
             name="Adam",
         )
 
-        def dice_loss(y_true,y_pred,smooth=1):
+        def dice_loss(y_true, y_pred, smooth=1):
             import keras.backend as K
             '''
             dice coefficient =2*sum(|y_true*y_pred|)/(sum(y_true^2)+sum(y_pred^2))
@@ -705,11 +798,12 @@ class CryoEmNet:
 
             https://github.com/tensorflow/addons/pull/2558/commits/fa02a90d838b6e521c8f5b1ae2fd6c0a4bd2b794
             '''
-            intersection=K.sum(K.abs(y_true*y_pred),axis=-1)
-            return 1-(2. * intersection + smooth) / (K.sum(K.square(y_true),-1) + K.sum(K.square(y_pred),-1) - intersection + smooth)
+            intersection = K.sum(K.abs(y_true*y_pred), axis=-1)
+            return 1-(2. * intersection + smooth) / (K.sum(K.square(y_true), -1) + K.sum(K.square(y_pred), -1) - intersection + smooth)
 
+        logging.debug("Compiling model")
         self.model.compile(
-            optimizer=optimizer, 
+            optimizer=optimizer,
             # loss='mse'
             # loss=giou_loss,
             # loss=GIoULoss(),
@@ -718,6 +812,7 @@ class CryoEmNet:
             metrics=[MeanIoU(num_classes=2), 'accuracy']
         )
 
+        logging.debug("Fitting model")
         self.model.fit(
             train_generator,
             validation_data=validation_generator,
@@ -726,6 +821,7 @@ class CryoEmNet:
         )
 
         # Functionality to delete the label data from the label_data folder
+        logging.debug("Outputting label data")
         folder = Path(os.getcwd()) / 'data' / 'label_data'
         for filename in folder.iterdir():
             file_path = folder / Path(filename)
@@ -746,14 +842,14 @@ class CryoEmNet:
         result = self.model.predict(img)
 
         return result
-        
+
     def show_history(history):
         """
         Method to show the history of the model
 
         :param history: History of the model form fitting
         """
-        plt.figure(figsize=(20,6))
+        plt.figure(figsize=(20, 6))
 
         # summarize history for accuracy
         plt.subplot(121)
@@ -772,9 +868,9 @@ class CryoEmNet:
         plt.ylabel('loss')
         plt.xlabel('epoch')
         plt.legend(['train', 'test'], loc='upper left')
-        plt.show()    
+        plt.show()
 
-    def show_predictions(self, image_name:Path):
+    def show_predictions(self, image_name: Path):
         """
         Method that shows the predictions on a given image. 
 
@@ -787,56 +883,61 @@ class CryoEmNet:
         path = str(os.getcwd()) + '/data/raw_data/' + image_name.name
         image = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
 
-        path = str(os.getcwd()) + '/data/label_data/' + image_name.stem + '-points' + '.jpg'
+        path = str(os.getcwd()) + '/data/label_data/' + \
+            image_name.stem + '-points' + '.jpg'
         label_image = cv2.imread(str(path))
 
         resized_images = []
         resized_label_images = []
         # 682, 960
-        for i in range(self.image_size[0],image_height,self.image_size[0]):
-            for j in range(self.image_size[1],image_width,self.image_size[1]):
-                image_resize = image[i-self.image_size[0]:i, j-self.image_size[1]:j]
+        for i in range(self.image_size[0], image_height, self.image_size[0]):
+            for j in range(self.image_size[1], image_width, self.image_size[1]):
+                image_resize = image[i-self.image_size[0]
+                    :i, j-self.image_size[1]:j]
                 image_resize = image_resize.astype(float)
                 image_resize /= 255.
                 # Zero center image
-                image_resize = (image_resize - image_resize.mean()) / image_resize.std()
+                image_resize = (
+                    image_resize - image_resize.mean()) / image_resize.std()
 
-                label_image_resize = label_image[i-self.image_size[0]:i, j-self.image_size[1]:j]
-                label_image_resize= label_image_resize.astype(float)
+                label_image_resize = label_image[i -
+                                                 self.image_size[0]:i, j-self.image_size[1]:j]
+                label_image_resize = label_image_resize.astype(float)
                 label_image_resize /= 255.
 
                 resized_images.append(image_resize)
                 resized_label_images.append(label_image_resize)
 
-        resized_images = np.asarray(resized_images)    
+        resized_images = np.asarray(resized_images)
         resized_label_images = np.asarray(resized_label_images)
-        
-        out = self.predict(resized_images[:,:,:])
+
+        out = self.predict(resized_images[:, :, :])
 
         fig = plt.figure(figsize=(20, 8))
-        
-        outer = gridspec.GridSpec(image_width // self.image_size[1], image_height // self.image_size[0], wspace=0.2, hspace=0.5)
+
+        outer = gridspec.GridSpec(
+            image_width // self.image_size[1], image_height // self.image_size[0], wspace=0.2, hspace=0.5)
 
         for i in range(len(resized_images)):
             inner = gridspec.GridSpecFromSubplotSpec(1, 3,
-                            subplot_spec=outer[i], wspace=0.2, hspace=0.5)
+                                                     subplot_spec=outer[i], wspace=0.2, hspace=0.5)
 
             ax = plt.Subplot(fig, inner[0])
-            ax.imshow(resized_images[i,:,:], cmap='gray')
+            ax.imshow(resized_images[i, :, :], cmap='gray')
             ax.set_title('Input image', fontsize=10)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
             fig.add_subplot(ax)
 
             ax = plt.Subplot(fig, inner[1])
-            ax.imshow(out[i,:,:],vmin=0,vmax=1, cmap='gray')
+            ax.imshow(out[i, :, :], vmin=0, vmax=1, cmap='gray')
             ax.set_title('Predicted', fontsize=10)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
             fig.add_subplot(ax)
-            
+
             ax = plt.Subplot(fig, inner[2])
-            ax.imshow(resized_label_images[i,:,:],vmin=0,vmax=1)
+            ax.imshow(resized_label_images[i, :, :], vmin=0, vmax=1)
             ax.set_title('Ground truth', fontsize=10)
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)

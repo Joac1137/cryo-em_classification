@@ -133,3 +133,4 @@ dmypy.json
 
 /segmentation_environment
 .DS_Store
+*.log
