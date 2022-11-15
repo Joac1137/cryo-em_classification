@@ -41,8 +41,8 @@ logging.basicConfig(filename='cryo-em-select.log',
 
 class CryoBatchGenerator(Sequence):
     """
-    This is a generator for batches of training data. It reads in a list of paths to the training images. We preprocess the images 
-    and create the labels from the .csv files. 
+    This is a generator for batches of training data. It reads in a list of paths to the training images. We preprocess the images
+    and create the labels from the .csv files.
     """
 
     def __init__(self, X, batch_size, image_size=(224, 224, 1), shuffle=False, save_labels=False, label_type='gauss'):
@@ -85,7 +85,8 @@ class CryoBatchGenerator(Sequence):
                     First output is the training data
                     Second output is the label for the images
         """
-        logging.debug("generating one batch of data for batch index: {index}")
+        logging.debug(
+            "Generating one batch of data for batch index: {index}", index=index)
         batch = self.X[index * self.batch_size:(index + 1) * self.batch_size]
         X, Y = self.__get_data(batch)
 
@@ -100,7 +101,7 @@ class CryoBatchGenerator(Sequence):
                     First output is the raw images
                     Second output is the label for the images
         """
-        logging.debug("creating batch")
+        logging.debug("Creating batch")
         # __get_input return tuples, thus we convert them to list of tuples and further map to a list
         X_batch, Y_batch = zip(*[self.__get_input(x) for x in batch])
 
@@ -115,14 +116,14 @@ class CryoBatchGenerator(Sequence):
 
     def __get_input(self, path):
         """
-        This method labels a image given by its path. 
+        This method labels a image given by its path.
 
         :param path: The path to the image file
         :return: Return images
                     First output is the original image scaled
                     Second output is the labels for the images
         """
-        logging.debug("add labels for image")
+        logging.debug("Add labels for image: {path}", path=path)
         image_height = 622
         image_width = 900
 
@@ -145,7 +146,7 @@ class CryoBatchGenerator(Sequence):
         img = img[30:-30, 30:-30]
         gauss_img = gauss_img[30:-30, 30:-30]
         # Apply edge detection
-        #img = cv2.Sobel(img, cv2.CV_8U, 1, 0, ksize=3)
+        # img = cv2.Sobel(img, cv2.CV_8U, 1, 0, ksize=3)
 
         cropped_images = []
         cropped_label_images = []
@@ -157,10 +158,9 @@ class CryoBatchGenerator(Sequence):
                 image /= 255.
                 # Zero center image
                 image = (image - image.mean()) / image.std()
-                #image = (2 * image) - 1
+                # image = (2 * image) - 1
 
-                gauss_image = gauss_img[i-self.image_size[0]
-                    :i, j-self.image_size[1]:j]
+                gauss_image = gauss_img[i-self.image_size[0]                                        : i, j-self.image_size[1]: j]
                 gauss_image = gauss_image.astype(float)
                 gauss_image /= 255.
 
@@ -180,7 +180,7 @@ class CryoBatchGenerator(Sequence):
         """
         Total number of batches.
 
-        :return: The length of the 
+        :return: The length of the
         """
         return self.n // self.batch_size
 
@@ -218,10 +218,10 @@ class CryoEmNet:
 
     def __convolution_layer(self, x, filters, kernel_size=3, padding='same', kernel_initializer='he_normal'):
         """
-        General convolution layer block that applies a convolution, batch normalization and further a activation function 
+        General convolution layer block that applies a convolution, batch normalization and further a activation function
 
         :param x: Input tensor
-        :param filters: Integer, the dimensionality of the output space 
+        :param filters: Integer, the dimensionality of the output space
         :param kernel_size: An integer or tuple/list of 2 integers, specifying the height and width of the 2D convolution window
         :param padding: Padding scheme
         :param kernel_initializer: Regularizer function
@@ -663,13 +663,16 @@ class CryoEmNet:
         :param save_model: Whether to save the model
         """
         logging.debug("Starting train")
-        logging.debug(" - filepath: {filepath}")
-        logging.debug(" - nb_epoch_early: {nb_epoch_early}")
-        logging.debug(" - warmrestarts: {warmrestarts}")
-        logging.debug(" - learning_rate: {learning_rate}")
-        logging.debug(" - epochs: {epochs}")
-        logging.debug(" - save_log: {save_log}")
-        logging.debug(" - save_model: {save_model}")
+        logging.debug(" - filepath: {filepath}", filepath=filepath)
+        logging.debug(
+            " - nb_epoch_early: {nb_epoch_early}", nb_epoch_early=nb_epoch_early)
+        logging.debug(
+            " - warmrestarts: {warmrestarts}", warmrestarts=warmrestarts)
+        logging.debug(
+            " - learning_rate: {learning_rate}", learning_rate=learning_rate)
+        logging.debug(" - epochs: {epochs}", epochs=epochs)
+        logging.debug(" - save_log: {save_log}", save_log=save_log)
+        logging.debug(" - save_model: {save_model}", save_model=save_model)
 
         data_path = [x for x in Path(
             str(os.getcwd()) + '/data/raw_data/').iterdir()]
