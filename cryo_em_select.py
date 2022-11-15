@@ -86,7 +86,7 @@ class CryoBatchGenerator(Sequence):
                     Second output is the label for the images
         """
         logging.debug(
-            "Generating one batch of data for batch index: {index}", index=index)
+            "Generating one batch of data for batch index: {index}".format(index=index))
         batch = self.X[index * self.batch_size:(index + 1) * self.batch_size]
         X, Y = self.__get_data(batch)
 
@@ -123,7 +123,7 @@ class CryoBatchGenerator(Sequence):
                     First output is the original image scaled
                     Second output is the labels for the images
         """
-        logging.debug("Add labels for image: {path}", path=path)
+        logging.debug("Add labels for image: {path}".format(path=path))
         image_height = 622
         image_width = 900
 
@@ -160,7 +160,7 @@ class CryoBatchGenerator(Sequence):
                 image = (image - image.mean()) / image.std()
                 # image = (2 * image) - 1
 
-                gauss_image = gauss_img[i-self.image_size[0]                                        : i, j-self.image_size[1]: j]
+                gauss_image = gauss_img[i-self.image_size[0]: i, j-self.image_size[1]: j]
                 gauss_image = gauss_image.astype(float)
                 gauss_image /= 255.
 
@@ -663,21 +663,22 @@ class CryoEmNet:
         :param save_model: Whether to save the model
         """
         logging.debug("Starting train")
-        logging.debug(" - filepath: {filepath}", filepath=filepath)
+        logging.debug(" - filepath: {filepath}".format(filepath=filepath))
         logging.debug(
-            " - nb_epoch_early: {nb_epoch_early}", nb_epoch_early=nb_epoch_early)
+            " - nb_epoch_early: {nb_epoch_early}".format(nb_epoch_early=nb_epoch_early))
         logging.debug(
-            " - warmrestarts: {warmrestarts}", warmrestarts=warmrestarts)
+            " - warmrestarts: {warmrestarts}".format(warmrestarts=warmrestarts))
         logging.debug(
-            " - learning_rate: {learning_rate}", learning_rate=learning_rate)
-        logging.debug(" - epochs: {epochs}", epochs=epochs)
-        logging.debug(" - save_log: {save_log}", save_log=save_log)
-        logging.debug(" - save_model: {save_model}", save_model=save_model)
+            " - learning_rate: {learning_rate}".format(learning_rate=learning_rate))
+        logging.debug(" - epochs: {epochs}".format(epochs=epochs))
+        logging.debug(" - save_log: {save_log}".format(save_log=save_log))
+        logging.debug(
+            " - save_model: {save_model}".format(save_model=save_model))
 
         data_path = [x for x in Path(
             str(os.getcwd()) + '/data/raw_data/').iterdir()]
 
-        logging.debug("data_path = {data_path}")
+        logging.debug("data_path = {data_path}".format(data_path=data_path))
 
         # Generator with the training data
         logging.debug("Creating training data generator")
