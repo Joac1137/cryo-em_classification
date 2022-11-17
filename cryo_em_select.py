@@ -129,10 +129,13 @@ class CryoBatchGenerator(Sequence):
 
         label_path = Path(
             str(os.getcwd()) + '/data/label_annotation/' + path.stem + '-points' + '.csv')
-        if not label_path.exists():
-            return [], []
-        label_df = pd.read_csv(label_path, header=None)
-        label_df = label_df.round(0).astype(int)
+        label_df = pd.DataFrame()
+        if label_path.exists():
+            logging.debug(" - Labels found")
+            label_df = pd.read_csv(label_path, header=None)
+            label_df = label_df.round(0).astype(int)
+        else:
+            logging.debug(" - Labels not found")
 
         # Coordinate system turns in a weird way.
         points = [(rows[1], rows[0]) for _, rows in label_df.iterrows()]
