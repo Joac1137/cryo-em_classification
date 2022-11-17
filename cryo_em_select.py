@@ -107,11 +107,11 @@ class CryoBatchGenerator(Sequence):
 
         # Collapse the first dimensions.
         X_batch = np.asarray(X_batch)
-        X_batch = np.concatenate(X_batch, axis=0)
+        #X_batch = np.concatenate(X_batch, axis=0)
 
         Y_batch = np.asarray(Y_batch)
-        Y_batch = np.concatenate(Y_batch, axis=0)
-
+        #Y_batch = np.concatenate(Y_batch, axis=0)
+        
         return X_batch, Y_batch
 
     def __get_input(self, path):
@@ -124,8 +124,11 @@ class CryoBatchGenerator(Sequence):
                     Second output is the labels for the images
         """
         logging.debug("Add labels for image: {path}".format(path=path))
-        image_height = 622
-        image_width = 900
+        # image_height = 622
+        # image_width = 900
+
+        image_height = 640
+        image_width = 880
 
         label_path = Path(
             str(os.getcwd()) + '/data/label_annotation/' + path.stem + '-points' + '.csv')
@@ -146,10 +149,14 @@ class CryoBatchGenerator(Sequence):
         gauss_img = preprocess.GaussianHighlight(
             img[:, :], points, 32, self.label_type)
 
-        img = img[30:-30, 30:-30]
-        gauss_img = gauss_img[30:-30, 30:-30]
-        # Apply edge detection
-        # img = cv2.Sobel(img, cv2.CV_8U, 1, 0, ksize=3)
+        img = img[21:-21, 40:-40]
+        gauss_img = gauss_img[21:-21, 40:-40]
+
+
+        image = img / 255.
+        image = (image - image.mean()) / image.std()
+
+        gauss_image = gauss_img / 255.
 
         cropped_images = []
         cropped_label_images = []
@@ -177,7 +184,8 @@ class CryoBatchGenerator(Sequence):
                 cv2.imwrite(str(filename), gauss_img, [
                             cv2.IMWRITE_JPEG_QUALITY, 100])
 
-        return cropped_images, cropped_label_images
+        #return cropped_images, cropped_label_images
+        return image, gauss_image
 
     def __len__(self):
         """
@@ -805,6 +813,8 @@ class CryoEmNet:
 
             https://github.com/tensorflow/addons/pull/2558/commits/fa02a90d838b6e521c8f5b1ae2fd6c0a4bd2b794
             '''
+            y_true = float(y_true)
+            y_pred = float(y_pred)
             intersection = K.sum(K.abs(y_true*y_pred), axis=-1)
             return 1-(2. * intersection + smooth) / (K.sum(K.square(y_true), -1) + K.sum(K.square(y_pred), -1) - intersection + smooth)
 
