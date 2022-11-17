@@ -32,6 +32,7 @@
 - Use add instead of concatenate
 - Might change accuracy to val_loss in callbacks - might be a very good idea
 - Use transpose convolution for up-sampling
+- Plot segmentation on top of the original image?
 
 # Experiments
 - Large unet model
