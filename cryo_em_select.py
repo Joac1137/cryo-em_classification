@@ -715,18 +715,19 @@ class CryoEmNet:
 
         # Define callbacks
         logging.debug("Defining callbacks")
+        
         all_callbacks = []
-        if save_model:
-            checkpoint = ModelCheckpoint(
-                filepath=filepath,
-                monitor="accuracy",
-                verbose=1,
-                save_best_only=True,
-                save_weights_only=True,
-                mode="max",
-                save_freq='epoch',
-            )
-            all_callbacks.append(checkpoint)
+        # Tried to remove the checkpoint callback
+        # checkpoint = ModelCheckpoint(
+        #     filepath=filepath,
+        #     monitor="accuracy",
+        #     verbose=1,
+        #     save_best_only=True,
+        #     save_weights_only=True,
+        #     mode="max",
+        #     save_freq='epoch',
+        # )
+        # all_callbacks.append(checkpoint)
 
         early_stop = EarlyStopping(
             monitor="accuracy",
@@ -836,6 +837,10 @@ class CryoEmNet:
             epochs=epochs,
             callbacks=all_callbacks
         )
+        
+        logging.debug("Saving the model")
+        if save_model:  
+            self.model.save(str(filepath))
 
         # Functionality to delete the label data from the label_data folder
         logging.debug("Outputting label data")
