@@ -21,7 +21,7 @@ from keras.layers import (
     concatenate,
     Input
 )
-from keras.metrics import MeanIoU
+from keras.metrics import MeanIoU, BinaryIoU
 from keras.models import Model
 from keras.optimizers import Adam
 from matplotlib import pyplot as plt
@@ -33,6 +33,7 @@ from keras.callbacks import (
     LearningRateScheduler
 )
 from tensorflow_addons.losses import GIoULoss, giou_loss
+import pickle
 
 import logging
 logging.basicConfig(filename='cryo-em-select.log',
@@ -687,7 +688,7 @@ class CryoEmNet:
             " - save_model: {save_model}".format(save_model=save_model))
 
         data_path = [x for x in Path(
-            str(os.getcwd()) + '/data/raw_data/').iterdir()]
+            str(os.getcwd()) + '/data/raw_data/').iterdir()][:100]
 
         logging.debug("data_path = {data_path}".format(data_path=data_path))
 
@@ -718,16 +719,16 @@ class CryoEmNet:
         
         all_callbacks = []
         # Tried to remove the checkpoint callback
-        # checkpoint = ModelCheckpoint(
-        #     filepath=filepath,
-        #     monitor="accuracy",
-        #     verbose=1,
-        #     save_best_only=True,
-        #     save_weights_only=True,
-        #     mode="max",
-        #     save_freq='epoch',
-        # )
-        # all_callbacks.append(checkpoint)
+        checkpoint = ModelCheckpoint(
+            filepath=filepath,
+            monitor="accuracy",
+            verbose=1,
+            save_best_only=True,
+            save_weights_only=True,
+            mode="max",
+            save_freq='epoch',
+        )
+        all_callbacks.append(checkpoint)
 
         early_stop = EarlyStopping(
             monitor="accuracy",
@@ -827,20 +828,24 @@ class CryoEmNet:
             # loss=GIoULoss(),
             loss=dice_loss,
             # metrics=['accuracy'],
-            metrics=[MeanIoU(num_classes=2), 'accuracy']
+            metrics=[BinaryIoU(name='IoU'), 'accuracy']
         )
 
         logging.debug("Fitting model")
-        self.model.fit(
+        history = self.model.fit(
             train_generator,
             validation_data=validation_generator,
             epochs=epochs,
             callbacks=all_callbacks
         )
         
-        logging.debug("Saving the model")
+        logging.debug("Saving the model and history")
         if save_model:  
             self.model.save(str(filepath))
+        if save_log:
+            with open(filepath / 'train_history', 'wb') as f:
+                pickle.dump(history.history, f)
+
 
         # Functionality to delete the label data from the label_data folder
         logging.debug("Outputting label data")
@@ -865,48 +870,27 @@ class CryoEmNet:
 
         return result
 
-    def show_history(history):
-        """
-        Method to show the history of the model
-
-        :param history: History of the model form fitting
-        """
-        plt.figure(figsize=(20, 6))
-
-        # summarize history for accuracy
-        plt.subplot(121)
-        plt.plot(history.history['accuracy'])
-        plt.plot(history.history['val_accuracy'])
-        plt.title('model accuracy')
-        plt.ylabel('accuracy')
-        plt.xlabel('epoch')
-        plt.legend(['train', 'test'], loc='upper left')
-
-        # summarize history for loss
-        plt.subplot(122)
-        plt.plot(history.history['loss'])
-        plt.plot(history.history['val_loss'])
-        plt.title('model loss')
-        plt.ylabel('loss')
-        plt.xlabel('epoch')
-        plt.legend(['train', 'test'], loc='upper left')
-        plt.show()
-
-    def show_predictions(self, image_name: Path):
+    def show_predictions(self, image_name: Path, label_type):
         """
         Method that shows the predictions on a given image. 
 
         :param image_name: The Path of the input image
         """
         import matplotlib.gridspec as gridspec
-        image_height = 622
-        image_width = 900
+        # image_height = 622
+        # image_width = 900
 
-        path = str(os.getcwd()) + '/data/raw_data/' + image_name.name
+        image_height = 640
+        image_width = 880
+
+        # path = str(os.getcwd()) + '/data/raw_data/' + image_name.name
+        path = Path(os.getcwd()) / 'data_exploration' / 'raw_data' / image_name.name
         image = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
 
-        path = str(os.getcwd()) + '/data/label_data/' + \
-            image_name.stem + '-points' + '.jpg'
+        # path = str(os.getcwd()) + '/data/label_data/' + \
+        #     image_name.stem + '-points' + '.jpg'
+        test = str(image_name.stem) + '-points' + '-' + label_type + '.jpg'
+        path = Path(os.getcwd()) / 'data_exploration' / 'label_data' / test
         label_image = cv2.imread(str(path))
 
         resized_images = []
@@ -964,3 +948,5 @@ class CryoEmNet:
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
             fig.add_subplot(ax)
+
+        plt.show()
