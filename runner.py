@@ -1,6 +1,7 @@
 import cryo_em_select as cryo
 from pathlib import Path
 import os
+import cv2
 
 """
 Enable different labels
@@ -170,10 +171,9 @@ def show_single(
     :param filepath: The path to the image we are using for prediction
     """
     from matplotlib import pyplot as plt
-    import matplotlib.image as mpimg
     import numpy as np
 
-    original_image = mpimg.imread(str(filepath))
+    original_image = cv2.imread(str(filepath), cv2.IMREAD_GRAYSCALE)
 
     resized_image = original_image[21:-21, 40:-40]
     resized_image = np.expand_dims(resized_image, axis=0)
@@ -181,7 +181,7 @@ def show_single(
     prediction = model.predict(resized_image)
 
     f, axarr = plt.subplots(1,2) 
-    axarr[0].imshow(original_image)
+    axarr[0].imshow(original_image, cmap='gray')
     axarr[1].imshow(prediction[0], cmap='gray')
 
     plt.show()
@@ -190,8 +190,8 @@ def show_single(
 def model_exploration():
     # Model explorations
     import keras.models
-    label_type = 'white_square'
-    path = Path(os.getcwd()) / 'server' / 'Experiments' / 'basic_model_experiments' / 'basic_model' / label_type
+    label_type = 'gauss'
+    path = Path(os.getcwd()) / 'server' / 'large' / 'Experiments' / 'large_residual_unet_experiments' / 'large_residual_unet_model' / label_type
 
     def dice_loss(y_true, y_pred, smooth=1):
         import keras.backend as K
@@ -211,12 +211,16 @@ def model_exploration():
         return 1-(2. * intersection + smooth) / (K.sum(K.square(y_true), -1) + K.sum(K.square(y_pred), -1) - intersection + smooth)
 
     model = keras.models.load_model(str(path), custom_objects={'dice_loss':dice_loss})
-    cryo_thing = cryo.CryoEmNet(batch_size=20, image_size=(
-        640, 880, 1), label_type=label_type, model=model)
-    image_path = Path('FoilHole_16384305_Data_16383479_16383481_20201016_164256_fractions.png')
-    cryo_thing.show_predictions(image_name=image_path, label_type=label_type)
-
-    with open(Path(str(os.getcwd())) / 'Experiments' /
+    
+    # cryo_thing = cryo.CryoEmNet(batch_size=20, image_size=(
+    #     224, 224, 1), label_type=label_type, model=model)
+    
+    # image_path = Path('FoilHole_16384305_Data_16383479_16383481_20201016_164256_fractions.png')
+    # cryo_thing.show_predictions(image_name=image_path, label_type=label_type)
+    
+    # show_single(model)
+    
+    with open(Path(str(os.getcwd())) / 'server' / 'large' / 'Experiments' /
         'basic_model_experiments' / 'basic_model' / 'white_square' / 'train_history', "rb") as f:
         import pickle
         history = pickle.load(f)
@@ -261,12 +265,12 @@ def show_history(history):
     plt.show()
 
 def main():
-    basic_model_experiment()
-    custom_unet_experiment()
-    large_unet_experiment()
-    large_residual_unet_experiment()
+    # basic_model_experiment()
+    # custom_unet_experiment()
+    # large_unet_experiment()
+    # large_residual_unet_experiment()
     
-    # model_exploration()
+    model_exploration()
     
     
 if __name__ == '__main__':

@@ -688,7 +688,7 @@ class CryoEmNet:
             " - save_model: {save_model}".format(save_model=save_model))
 
         data_path = [x for x in Path(
-            str(os.getcwd()) + '/data/raw_data/').iterdir()][:100]
+            str(os.getcwd()) + '/data/raw_data/').iterdir()]
 
         logging.debug("data_path = {data_path}".format(data_path=data_path))
 
@@ -910,13 +910,13 @@ class CryoEmNet:
                                                  self.image_size[0]:i, j-self.image_size[1]:j]
                 label_image_resize = label_image_resize.astype(float)
                 label_image_resize /= 255.
-
+                
                 resized_images.append(image_resize)
                 resized_label_images.append(label_image_resize)
-
+                
         resized_images = np.asarray(resized_images)
         resized_label_images = np.asarray(resized_label_images)
-
+        
         out = self.predict(resized_images[:, :, :])
 
         fig = plt.figure(figsize=(20, 8))
