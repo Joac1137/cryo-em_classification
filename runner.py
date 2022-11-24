@@ -18,7 +18,7 @@ def basic_model_experiment():
         filepath=Path(str(os.getcwd())) / 'Experiments' /
         'basic_model_experiments' / 'basic_model' / 'points',
         learning_rate=10 ** -2,
-        epochs=1,
+        epochs=30,
         save_log=True,
         save_model=True)
 
@@ -191,7 +191,7 @@ def model_exploration():
     # Model explorations
     import keras.models
     label_type = 'gauss'
-    path = Path(os.getcwd()) / 'server' / 'large' / 'Experiments' / 'large_residual_unet_experiments' / 'large_residual_unet_model' / label_type
+    path = Path(os.getcwd()) / 'server' / 'small' / 'Experiments' / 'large_residual_unet_experiments' / 'large_residual_unet_model' / label_type
 
     def dice_loss(y_true, y_pred, smooth=1):
         import keras.backend as K
