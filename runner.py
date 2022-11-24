@@ -265,12 +265,12 @@ def show_history(history):
     plt.show()
 
 def main():
-    # basic_model_experiment()
-    # custom_unet_experiment()
-    # large_unet_experiment()
-    # large_residual_unet_experiment()
+    basic_model_experiment()
+    custom_unet_experiment()
+    large_unet_experiment()
+    large_residual_unet_experiment()
     
-    model_exploration()
+    #model_exploration()
     
     
 if __name__ == '__main__':
