@@ -15,6 +15,10 @@ _Note_: Some package might not install because of _Windows Long Paths_. Solved [
 - Freeze requirements - `pip freeze > requirements.txt`
 
 
+# Run
+
+
+
 # Small Assignemnet - Brief project status
 - Have you acquired and prepared your dataset? <br>
     We currently have 3256 cryo em data images. Each individual image is currently 682x960 and we therefore further divide each image into 224x224, such that the model doesn't have to large of an input. We are further working with the data because currently we have no labels on the edge of each image. Thereby, we might crop each of the 3256 images in order to increase the performance. <br>

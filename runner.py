@@ -190,7 +190,7 @@ def show_single(
 def model_exploration():
     # Model explorations
     import keras.models
-    label_type = 'gauss'
+    label_type = 'points'
     path = Path(os.getcwd()) / 'server' / 'small' / 'Experiments' / 'large_residual_unet_experiments' / 'large_residual_unet_model' / label_type
 
     def dice_loss(y_true, y_pred, smooth=1):
@@ -212,16 +212,15 @@ def model_exploration():
 
     model = keras.models.load_model(str(path), custom_objects={'dice_loss':dice_loss})
     
-    # cryo_thing = cryo.CryoEmNet(batch_size=20, image_size=(
-    #     224, 224, 1), label_type=label_type, model=model)
+    cryo_thing = cryo.CryoEmNet(batch_size=20, image_size=(
+        224, 224, 1), label_type=label_type, model=model)
     
-    # image_path = Path('FoilHole_16384305_Data_16383479_16383481_20201016_164256_fractions.png')
-    # cryo_thing.show_predictions(image_name=image_path, label_type=label_type)
+    image_path = Path('FoilHole_16384305_Data_16383479_16383481_20201016_164256_fractions.png')
+    cryo_thing.show_predictions(image_name=image_path, label_type=label_type)
     
     # show_single(model)
     
-    with open(Path(str(os.getcwd())) / 'server' / 'large' / 'Experiments' /
-        'basic_model_experiments' / 'basic_model' / 'white_square' / 'train_history', "rb") as f:
+    with open(str(path / 'train_history'), "rb") as f:
         import pickle
         history = pickle.load(f)
         show_history(history)
@@ -265,12 +264,12 @@ def show_history(history):
     plt.show()
 
 def main():
-    basic_model_experiment()
-    custom_unet_experiment()
-    large_unet_experiment()
-    large_residual_unet_experiment()
+    # basic_model_experiment()
+    # custom_unet_experiment()
+    # large_unet_experiment()
+    # large_residual_unet_experiment()
     
-    #model_exploration()
+    model_exploration()
     
     
 if __name__ == '__main__':
