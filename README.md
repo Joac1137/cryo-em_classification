@@ -1,4 +1,4 @@
-# cryo-em_segmentation
+# Cryo-em Segmentation
 Cryo-electron microscopy (Cryo-EM) is a way of imaging very small particle, but particle picking from these images remains a challenging early step in the Cryo-EM pipeline due to the diversity of particle shapes and the extremely low signal-to-noise ratio. Because of these issues, significant human intervention is often required to generate a high-quality set of particles. We want to apply the power of deep neural networks in order to alleviate this human intervention.
 
 
@@ -15,8 +15,15 @@ _Note_: Some package might not install because of _Windows Long Paths_. Solved [
 - Freeze requirements - `pip freeze > requirements.txt`
 
 
-# Run
+# How to run
 
+To train the network simply run `python runner.py`.
+
+To explore the result run `python runner.py -e`.
+You are able to add the following arguments:
+* `-p <path>` The path to the model (default: ./server/small/Experiments/large_residual_unet_experiments/large_residual_unet_model)
+* `-l <label_type>` The label type to explore (default: white_square): white_square, guass, points 
+* `-i <image_file>` The path of the image to check (default: FoilHole_16384305_Data_16383479_16383481_20201016_164256_fractions.png)
 
 
 # Small Assignemnet - Brief project status

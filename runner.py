@@ -271,7 +271,7 @@ def main(argv):
     explore = False
     try:
         opts, args = getopt.getopt(
-            argv, "helpi", ["label_type=", "path=", "explore=", "image_path="])
+            argv, "helpi", ["label_type=", "path=", "explore=", "image_file="])
     except getopt.GetoptError:
         print('runner.py -e -l <label_type> -p <path>')
         print('error')
@@ -282,10 +282,10 @@ def main(argv):
             sys.exit()
         elif opt in ("-l", "--label_type"):
             label_type = arg
-        elif opt in ("-i", "--image_path"):
+        elif opt in ("-i", "--image_file"):
             image_path = arg
         elif opt in ("-p", "--path"):
-            explore = arg
+            path = arg
         elif opt in ("-e", "--explore"):
             explore = True
 
