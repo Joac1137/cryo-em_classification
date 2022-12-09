@@ -129,6 +129,7 @@ dmypy.json
 .pyre/
 
 /data
+/data.zip
 #/logs
 
 /segmentation_environment
