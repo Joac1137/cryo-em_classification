@@ -661,7 +661,8 @@ class CryoEmNet:
         learning_rate=10 ** -2,
         epochs=10,
         save_log=True,
-        save_model=True
+        save_model=True,
+        use_all_data=False
     ):
         """
         Function that trains the CryoEmNet model. Method also handles all callback functionality, specify the model optimizer and compilers the model.
@@ -689,6 +690,8 @@ class CryoEmNet:
 
         data_path = [x for x in Path(
             str(os.getcwd()) + '/data/raw_data/').iterdir()]
+        if not use_all_data:
+            data_path = data_path[:200]
 
         logging.debug("data_path = {data_path}".format(data_path=data_path))
 

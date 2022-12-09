@@ -10,20 +10,18 @@ Cryo-electron microscopy (Cryo-EM) is a way of imaging very small particle, but 
 
 _Note_: Some package might not install because of _Windows Long Paths_. Solved [here](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=powershell).
 
-- Select virtual environment for ipynb kernel
-
-- Freeze requirements - `pip freeze > requirements.txt`
-
 
 # How to run
 
-To train the network simply run `python runner.py`. Make sure the data is downloaded and placed in the root of the project with the name `'data'`.
+To train the network simply run `python runner.py`. Make sure the data is downloaded and placed in the root of the project with the name `'data'`. In order to use the entire dataset use the `-a` argument.
 
 To explore the result run `python runner.py -e`.
 You are able to add the following arguments:
-* `-p <path>` The path to the model (default: ./server/small/Experiments/large_residual_unet_experiments/large_residual_unet_model)
+* `-p <path>` The path to the model (default: Experiments/large_residual_unet_experiments/large_residual_unet_model)
 * `-l <label_type>` The label type to explore (default: white_square): white_square, guass, points 
 * `-i <image_file>` The path of the image to check (default: FoilHole_16384305_Data_16383479_16383481_20201016_164256_fractions.png)
+
+When exploring different models just write `python .\runner.py -e --path <path>` depending on which model one might want to explore (path to model). 
 
 
 # Small Assignemnet - Brief project status

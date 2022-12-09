@@ -14,7 +14,7 @@ full_image_size = (640, 880, 1)
 cutout_image_size = (224, 224, 1)
 
 
-def basic_model_experiment():
+def basic_model_experiment(use_all_data):
     model = cryo.CryoEmNet(batch_size=20, label_type='points')
     model.build_basic_model()
 
@@ -24,7 +24,8 @@ def basic_model_experiment():
         learning_rate=10 ** -2,
         epochs=30,
         save_log=True,
-        save_model=True)
+        save_model=True,
+        use_all_data=use_all_data)
 
     model = cryo.CryoEmNet(batch_size=20, label_type='gauss')
     model.build_basic_model()
@@ -35,7 +36,8 @@ def basic_model_experiment():
         learning_rate=10 ** -2,
         epochs=30,
         save_log=True,
-        save_model=True)
+        save_model=True,
+        use_all_data=use_all_data)
 
     model = cryo.CryoEmNet(batch_size=20, label_type='white_square')
     model.build_basic_model()
@@ -46,10 +48,11 @@ def basic_model_experiment():
         learning_rate=10 ** -2,
         epochs=30,
         save_log=True,
-        save_model=True)
+        save_model=True,
+        use_all_data=use_all_data)
 
 
-def custom_unet_experiment():
+def custom_unet_experiment(use_all_data):
     model = cryo.CryoEmNet(batch_size=20, label_type='points')
     model.build_unet()
 
@@ -59,7 +62,8 @@ def custom_unet_experiment():
         learning_rate=10 ** -2,
         epochs=30,
         save_log=True,
-        save_model=True)
+        save_model=True,
+        use_all_data=use_all_data)
 
     model = cryo.CryoEmNet(batch_size=20, label_type='gauss')
     model.build_unet()
@@ -70,7 +74,8 @@ def custom_unet_experiment():
         learning_rate=10 ** -2,
         epochs=30,
         save_log=True,
-        save_model=True)
+        save_model=True,
+        use_all_data=use_all_data)
 
     model = cryo.CryoEmNet(batch_size=20, label_type='white_square')
     model.build_unet()
@@ -81,10 +86,11 @@ def custom_unet_experiment():
         learning_rate=10 ** -2,
         epochs=30,
         save_log=True,
-        save_model=True)
+        save_model=True,
+        use_all_data=use_all_data)
 
 
-def large_unet_experiment():
+def large_unet_experiment(use_all_data):
     model = cryo.CryoEmNet(batch_size=20, label_type='points')
     model.build_large_unet()
 
@@ -94,7 +100,8 @@ def large_unet_experiment():
         learning_rate=10 ** -2,
         epochs=30,
         save_log=True,
-        save_model=True)
+        save_model=True,
+        use_all_data=use_all_data)
 
     model = cryo.CryoEmNet(batch_size=20, label_type='gauss')
     model.build_large_unet()
@@ -105,7 +112,8 @@ def large_unet_experiment():
         learning_rate=10 ** -2,
         epochs=30,
         save_log=True,
-        save_model=True)
+        save_model=True,
+        use_all_data=use_all_data)
 
     model = cryo.CryoEmNet(batch_size=20, label_type='white_square')
     model.build_large_unet()
@@ -116,10 +124,11 @@ def large_unet_experiment():
         learning_rate=10 ** -2,
         epochs=30,
         save_log=True,
-        save_model=True)
+        save_model=True,
+        use_all_data=use_all_data)
 
 
-def large_residual_unet_experiment():
+def large_residual_unet_experiment(use_all_data):
     model = cryo.CryoEmNet(batch_size=20, label_type='points')
     model.build_large_residual_unet()
 
@@ -129,7 +138,8 @@ def large_residual_unet_experiment():
         learning_rate=10 ** -2,
         epochs=30,
         save_log=True,
-        save_model=True)
+        save_model=True,
+        use_all_data=use_all_data)
 
     model = cryo.CryoEmNet(batch_size=20, label_type='gauss')
     model.build_large_residual_unet()
@@ -140,7 +150,8 @@ def large_residual_unet_experiment():
         learning_rate=10 ** -2,
         epochs=30,
         save_log=True,
-        save_model=True)
+        save_model=True,
+        use_all_data=use_all_data)
 
     model = cryo.CryoEmNet(batch_size=20, label_type='white_square')
     model.build_large_residual_unet()
@@ -151,7 +162,8 @@ def large_residual_unet_experiment():
         learning_rate=10 ** -2,
         epochs=30,
         save_log=True,
-        save_model=True)
+        save_model=True,
+        use_all_data=use_all_data)
 
 
 def show_single(
@@ -182,14 +194,12 @@ def show_single(
     plt.show()
 
 
-def model_exploration(label_type='white_square', path=Path(os.getcwd()) / 'server' / 'small' / 'Experiments' /
+def model_exploration(label_type='white_square', path=Path(os.getcwd()) / 'Experiments' /
                       'large_residual_unet_experiments' / 'large_residual_unet_model', image_path=Path(
         'FoilHole_16384305_Data_16383479_16383481_20201016_164256_fractions.png')):
     # Model explorations
     import keras.models
-    label_type = 'points'
     path = path / label_type
-
     def dice_loss(y_true, y_pred, smooth=1):
         import keras.backend as K
         '''
@@ -214,8 +224,6 @@ def model_exploration(label_type='white_square', path=Path(os.getcwd()) / 'serve
         224, 224, 1), label_type=label_type, model=model)
 
     cryo_thing.show_predictions(image_name=image_path, label_type=label_type)
-
-    # show_single(model)
 
     with open(str(path / 'train_history'), "rb") as f:
         import pickle
@@ -264,14 +272,14 @@ def show_history(history):
 
 def main(argv):
     label_type = 'white_square'
-    path = Path(os.getcwd()) / 'server' / 'small' / 'Experiments' / \
-        'large_residual_unet_experiments' / 'large_residual_unet_model'
+    path = Path(os.getcwd()) / 'Experiments' / 'large_residual_unet_experiments' / 'large_residual_unet_model'
     image_path = Path(
         'FoilHole_16384305_Data_16383479_16383481_20201016_164256_fractions.png')
     explore = False
+    use_all_data = False
     try:
         opts, args = getopt.getopt(
-            argv, "helpi", ["label_type=", "path=", "explore=", "image_file="])
+            argv, "helpia", ["all_data=", "label_type=", "path=", "explore=", "image_file="])
     except getopt.GetoptError:
         print('runner.py -e -l <label_type> -p <path>')
         print('error')
@@ -285,18 +293,20 @@ def main(argv):
         elif opt in ("-i", "--image_file"):
             image_path = arg
         elif opt in ("-p", "--path"):
-            path = arg
+            path = Path(arg)
         elif opt in ("-e", "--explore"):
             explore = True
+        elif opt in ("-a", "--all_data"):
+            use_all_data = True
 
     if explore:
         model_exploration(label_type=label_type,
                           path=path, image_path=image_path)
     else:
-        basic_model_experiment()
-        custom_unet_experiment()
-        large_unet_experiment()
-        large_residual_unet_experiment()
+        basic_model_experiment(use_all_data)
+        custom_unet_experiment(use_all_data)
+        large_unet_experiment(use_all_data)
+        large_residual_unet_experiment(use_all_data)
 
 
 if __name__ == "__main__":
