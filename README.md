@@ -17,7 +17,7 @@ _Note_: Some package might not install because of _Windows Long Paths_. Solved [
 
 # How to run
 
-To train the network simply run `python runner.py`. Make sure the data is downloaded and places in the root of the project with the name `'data'`.
+To train the network simply run `python runner.py`. Make sure the data is downloaded and placed in the root of the project with the name `'data'`.
 
 To explore the result run `python runner.py -e`.
 You are able to add the following arguments:
