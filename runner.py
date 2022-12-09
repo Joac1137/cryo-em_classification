@@ -1,3 +1,5 @@
+import sys
+import getopt
 import cryo_em_select as cryo
 from pathlib import Path
 import os
@@ -8,10 +10,12 @@ Enable different labels
 Delete labels/folder after each model are done
 """
 
+full_image_size = (640, 880, 1)
+cutout_image_size = (224, 224, 1)
+
 
 def basic_model_experiment():
-    model = cryo.CryoEmNet(batch_size=20, image_size=(
-        640, 880, 1), label_type='points')
+    model = cryo.CryoEmNet(batch_size=20, label_type='points')
     model.build_basic_model()
 
     model.train(
@@ -22,8 +26,7 @@ def basic_model_experiment():
         save_log=True,
         save_model=True)
 
-    model = cryo.CryoEmNet(batch_size=20, image_size=(
-        640, 880, 1), label_type='gauss')
+    model = cryo.CryoEmNet(batch_size=20, label_type='gauss')
     model.build_basic_model()
 
     model.train(
@@ -34,8 +37,7 @@ def basic_model_experiment():
         save_log=True,
         save_model=True)
 
-    model = cryo.CryoEmNet(batch_size=20, image_size=(
-        640, 880, 1), label_type='white_square')
+    model = cryo.CryoEmNet(batch_size=20, label_type='white_square')
     model.build_basic_model()
 
     model.train(
@@ -48,8 +50,7 @@ def basic_model_experiment():
 
 
 def custom_unet_experiment():
-    model = cryo.CryoEmNet(batch_size=20, image_size=(
-        640, 880, 1), label_type='points')
+    model = cryo.CryoEmNet(batch_size=20, label_type='points')
     model.build_unet()
 
     model.train(
@@ -60,8 +61,7 @@ def custom_unet_experiment():
         save_log=True,
         save_model=True)
 
-    model = cryo.CryoEmNet(batch_size=20, image_size=(
-        640, 880, 1), label_type='gauss')
+    model = cryo.CryoEmNet(batch_size=20, label_type='gauss')
     model.build_unet()
 
     model.train(
@@ -72,8 +72,7 @@ def custom_unet_experiment():
         save_log=True,
         save_model=True)
 
-    model = cryo.CryoEmNet(batch_size=20, image_size=(
-        640, 880, 1), label_type='white_square')
+    model = cryo.CryoEmNet(batch_size=20, label_type='white_square')
     model.build_unet()
 
     model.train(
@@ -86,8 +85,7 @@ def custom_unet_experiment():
 
 
 def large_unet_experiment():
-    model = cryo.CryoEmNet(batch_size=20, image_size=(
-        640, 880, 1), label_type='points')
+    model = cryo.CryoEmNet(batch_size=20, label_type='points')
     model.build_large_unet()
 
     model.train(
@@ -98,8 +96,7 @@ def large_unet_experiment():
         save_log=True,
         save_model=True)
 
-    model = cryo.CryoEmNet(batch_size=20, image_size=(
-        640, 880, 1), label_type='gauss')
+    model = cryo.CryoEmNet(batch_size=20, label_type='gauss')
     model.build_large_unet()
 
     model.train(
@@ -110,8 +107,7 @@ def large_unet_experiment():
         save_log=True,
         save_model=True)
 
-    model = cryo.CryoEmNet(batch_size=20, image_size=(
-        640, 880, 1), label_type='white_square')
+    model = cryo.CryoEmNet(batch_size=20, label_type='white_square')
     model.build_large_unet()
 
     model.train(
@@ -124,8 +120,7 @@ def large_unet_experiment():
 
 
 def large_residual_unet_experiment():
-    model = cryo.CryoEmNet(batch_size=20, image_size=(
-        640, 880, 1), label_type='points')
+    model = cryo.CryoEmNet(batch_size=20, label_type='points')
     model.build_large_residual_unet()
 
     model.train(
@@ -136,8 +131,7 @@ def large_residual_unet_experiment():
         save_log=True,
         save_model=True)
 
-    model = cryo.CryoEmNet(batch_size=20, image_size=(
-        640, 880, 1), label_type='gauss')
+    model = cryo.CryoEmNet(batch_size=20, label_type='gauss')
     model.build_large_residual_unet()
 
     model.train(
@@ -148,8 +142,7 @@ def large_residual_unet_experiment():
         save_log=True,
         save_model=True)
 
-    model = cryo.CryoEmNet(batch_size=20, image_size=(
-        640, 880, 1), label_type='white_square')
+    model = cryo.CryoEmNet(batch_size=20, label_type='white_square')
     model.build_large_residual_unet()
 
     model.train(
@@ -160,10 +153,12 @@ def large_residual_unet_experiment():
         save_log=True,
         save_model=True)
 
+
 def show_single(
-    model, 
-    filepath:Path=Path(str(os.getcwd())) / 'data' / 'raw_data' / 'FoilHole_16384305_Data_16383479_16383481_20201016_164256_fractions.png'
-    ):
+    model,
+    filepath: Path = Path(str(os.getcwd())) / 'data' / 'raw_data' /
+    'FoilHole_16384305_Data_16383479_16383481_20201016_164256_fractions.png'
+):
     """
     Function that shows the model prediction of a image
 
@@ -180,18 +175,20 @@ def show_single(
 
     prediction = model.predict(resized_image)
 
-    f, axarr = plt.subplots(1,2) 
+    f, axarr = plt.subplots(1, 2)
     axarr[0].imshow(original_image, cmap='gray')
     axarr[1].imshow(prediction[0], cmap='gray')
 
     plt.show()
 
 
-def model_exploration():
+def model_exploration(label_type='white_square', path=Path(os.getcwd()) / 'server' / 'small' / 'Experiments' /
+                      'large_residual_unet_experiments' / 'large_residual_unet_model', image_path=Path(
+        'FoilHole_16384305_Data_16383479_16383481_20201016_164256_fractions.png')):
     # Model explorations
     import keras.models
     label_type = 'points'
-    path = Path(os.getcwd()) / 'server' / 'small' / 'Experiments' / 'large_residual_unet_experiments' / 'large_residual_unet_model' / label_type
+    path = path / label_type
 
     def dice_loss(y_true, y_pred, smooth=1):
         import keras.backend as K
@@ -210,20 +207,21 @@ def model_exploration():
         intersection = K.sum(K.abs(y_true*y_pred), axis=-1)
         return 1-(2. * intersection + smooth) / (K.sum(K.square(y_true), -1) + K.sum(K.square(y_pred), -1) - intersection + smooth)
 
-    model = keras.models.load_model(str(path), custom_objects={'dice_loss':dice_loss})
-    
+    model = keras.models.load_model(
+        str(path), custom_objects={'dice_loss': dice_loss})
+
     cryo_thing = cryo.CryoEmNet(batch_size=20, image_size=(
         224, 224, 1), label_type=label_type, model=model)
-    
-    image_path = Path('FoilHole_16384305_Data_16383479_16383481_20201016_164256_fractions.png')
+
     cryo_thing.show_predictions(image_name=image_path, label_type=label_type)
-    
+
     # show_single(model)
-    
+
     with open(str(path / 'train_history'), "rb") as f:
         import pickle
         history = pickle.load(f)
         show_history(history)
+
 
 def show_history(history):
     """
@@ -263,14 +261,43 @@ def show_history(history):
 
     plt.show()
 
-def main():
-    # basic_model_experiment()
-    # custom_unet_experiment()
-    # large_unet_experiment()
-    # large_residual_unet_experiment()
-    
-    model_exploration()
-    
-    
-if __name__ == '__main__':
-    main()
+
+def main(argv):
+    label_type = 'white_square'
+    path = Path(os.getcwd()) / 'server' / 'small' / 'Experiments' / \
+        'large_residual_unet_experiments' / 'large_residual_unet_model'
+    image_path = Path(
+        'FoilHole_16384305_Data_16383479_16383481_20201016_164256_fractions.png')
+    explore = False
+    try:
+        opts, args = getopt.getopt(
+            argv, "helpi", ["label_type=", "path=", "explore=", "image_path="])
+    except getopt.GetoptError:
+        print('runner.py -e -l <label_type> -p <path>')
+        print('error')
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print('runner.py -e -l <label_type> -p <path> -i <image_path>')
+            sys.exit()
+        elif opt in ("-l", "--label_type"):
+            label_type = arg
+        elif opt in ("-i", "--image_path"):
+            image_path = arg
+        elif opt in ("-p", "--path"):
+            explore = arg
+        elif opt in ("-e", "--explore"):
+            explore = True
+
+    if explore:
+        model_exploration(label_type=label_type,
+                          path=path, image_path=image_path)
+    else:
+        basic_model_experiment()
+        custom_unet_experiment()
+        large_unet_experiment()
+        large_residual_unet_experiment()
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
